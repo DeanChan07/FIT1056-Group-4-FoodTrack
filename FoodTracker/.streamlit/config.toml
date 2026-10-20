@@ -1,0 +1,22 @@
+# FoodShare Tracker runs on this computer only, unless started with: python run.py --network
+
+[server]
+address = "localhost"        # run.py --network changes this for phones and other computers
+port = 8501
+headless = false             # open the browser automatically
+showEmailPrompt = false
+
+[browser]
+gatherUsageStats = false
+serverAddress = "localhost"
+
+[client]
+toolbarMode = "minimal"
+
+[theme]
+base = "light"
+primaryColor = "#0f766e"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f0fdfa"
+textColor = "#0f172a"
+font = "sans serif"
