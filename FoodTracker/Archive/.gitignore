@@ -1,0 +1,22 @@
+# Local Python tools and test output
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# The database is made on each computer by seed.py (or run.py on first start)
+data/
+backups/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+# HTTPS keys and other secrets never go in git
+*.pem
+*.key
+.streamlit/secrets.toml
+
+# Operating system files
+.DS_Store
+Thumbs.db
