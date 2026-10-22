@@ -16,9 +16,9 @@ def reports():
     c.header("Reports", "Donations received and food given out between two dates.",
              "bar_chart")
     a, b = st.columns(2)
-    start = a.date_input("From", value=date.today() - timedelta(days=30), format="DD/MM/YYYY",
+    start = a.date_input("From", value=d.today() - timedelta(days=30), format="DD/MM/YYYY",
                          key="rep_start")
-    end = b.date_input("To", value=date.today(), format="DD/MM/YYYY", key="rep_end")
+    end = b.date_input("To", value=d.today(), format="DD/MM/YYYY", key="rep_end")
     try:
         report = s.build_report(c.store(), user, c.iso(start), c.iso(end))
     except DomainError as e:
@@ -50,19 +50,7 @@ def feedback_inbox():
     a, b, x = st.columns(3)
     a.metric("Total", fb["total"], border=True)
     b.metric("New", fb["new"], border=True)
-    x.metric("Average rating", f"{fb['average']} / 5" if fb["average"] else "None yet",
-             border=True)
-    left, right = st.columns(2, gap="medium")
-    with left.container(border=True):
-        st.markdown("**Ratings**")
-        st.bar_chart([{"Rating": f"{r} {label}", "People": fb["by_rating"][r]}
-                      for r, (emoji, label) in d.FEEDBACK_RATINGS.items()],
-                     x="Rating", y="People", sort=False, color="#14b8a6", x_label="")
-    with right.container(border=True):
-        st.markdown("**Topics**")
-        st.bar_chart([{"Topic": k, "People": v} for k, v in fb["by_category"].items()],
-                     x="Topic", y="People", horizontal=True, sort=False, color="#0f766e",
-                     y_label="")
+    x.metric("Archived", fb["archived"], border=True)
     a, b = st.columns(2)
     show_all = a.toggle("Show feedback already reviewed", key="fb_all")
     show_archived = b.toggle(f"Show archived ({fb['archived']})", key="fb_archived")
@@ -72,11 +60,9 @@ def feedback_inbox():
         st.success("You have read everything.", icon=":material/check_circle:")
     for f in rows:
         with st.container(border=True):
-            face = d.FEEDBACK_RATINGS[f["rating"]] if f["rating"] else ("", "No rating")
-            st.markdown(f"{face[0]} **{face[1]}** · {f['category']} · "
-                        f"{c.nice_date(f['submitted_on'])} "
+            st.markdown(f"{c.nice_date(f['submitted_on'])} "
                         f"{c.badge('Archived' if f['archived'] else 'Reviewed' if f['reviewed'] else 'New')}")
-            st.markdown(c.esc(f["message"]) or "_No message._")
+            st.markdown(c.esc(f["message"]))
             with st.container(horizontal=True):
                 if not f["reviewed"] and st.button("Mark as reviewed", key=f"fb_done_{f['id']}",
                                                    icon=":material/done:"):
@@ -99,7 +85,7 @@ def audit_log():
     """FR-56 and FR-57: read-only history. Admins see sign-in and account events,
     Managers see stock and food events. Private details are never written here."""
     user = c.me()
-    s.require(user, d.ADMIN, d.MANAGER)
+    s.require(user, d.ADMIN, d.MANAGER, d.STAFF)
     what = "sign-in and account" if user["role"] == d.ADMIN else "stock, food and queue"
     c.header("Audit log", f"Every {what} change, newest first. Nobody can edit or delete "
              "these entries.", "history")

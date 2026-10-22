@@ -4,6 +4,7 @@ messages that survive a refresh, and small display pieces."""
 import html
 import json
 import re
+import sqlite3
 from datetime import date, datetime, time
 
 import streamlit as st
@@ -38,7 +39,7 @@ def store():
 
 # ---------------------------------------------------------------- who is signed in
 
-def me():
+def me(*, touch=True):
     """The signed-in person, checked against their session each time, or None.
 
     The session token lives in this browser tab's state and in a cookie, so a
@@ -49,7 +50,7 @@ def me():
         token = st.context.cookies.get(COOKIE)
     if not isinstance(token, str) or not token:
         return None
-    user, reason = s.resume_session(store(), token)
+    user, reason = s.resume_session(store(), token, touch=touch)
     if not user:
         st.session_state.pop("session_token", None)
         st.session_state.pop("user_id", None)
@@ -80,16 +81,25 @@ def sign_out():
 
 def write_cookie():
     """Send a pending sign-in (or sign-out) to the browser as a cookie. Runs once
-    per change. SameSite=Strict, and Secure when the app is served over HTTPS."""
+    per change, through a CSRF-protected server route. HttpOnly and SameSite=Strict;
+    Secure when served over HTTPS."""
     if "_cookie" not in st.session_state:
         return
     token = st.session_state.pop("_cookie")
-    age = d.SESSION_MAX_HOURS * 3600 if token else 0
-    st.html(f"""<script>
-        document.cookie = {json.dumps(COOKIE)} + "=" + {json.dumps(token)}
-            + "; path=/; max-age={age}; SameSite=Strict"
-            + (location.protocol === "https:" ? "; Secure" : "");
-        </script>""", unsafe_allow_javascript=True, width=1)
+    import os
+    if os.environ.get("FOODSHARE_COOKIE_ENDPOINT") != "1":
+        return  # AppTest/direct streamlit launch keeps a server-side tab session only.
+    from foodshare.http_security import cookie_handoff
+    handle = cookie_handoff(token)
+    st.html("""<script>
+    (async () => {
+        const response = await fetch('/foodshare/csrf', {credentials: 'same-origin', cache: 'no-store'});
+        const data = await response.json();
+        await fetch('/foodshare/session', {method: 'POST', credentials: 'same-origin',
+            headers: {'X-Foodshare-CSRF': data.token, 'Content-Type': 'text/plain'},
+            body: """ + json.dumps(handle) + """});
+    })();
+    </script>""", unsafe_allow_javascript=True, width=1)
 
 
 # ---------------------------------------------------------------- messages
@@ -230,6 +240,8 @@ def needs_text(summary):
     if not summary:
         return "No needs profile yet."
     parts = [f"Household of {summary['household_size']}"]
+    if not summary.get("allergies_confirmed"):
+        parts.append("allergy information not confirmed")
     if summary["allergies"]:
         parts.append("allergies: " + ", ".join(summary["allergies"]))
     if summary["dietary"]:
@@ -249,48 +261,50 @@ def go(page_key):
 
 
 def queue_card(q, title="Your place in the pickup queue"):
-    """A Recipient's own place: never anyone else's name."""
     with st.container(border=True):
         st.markdown(f"**{title}** {badge(q['state'])}")
-        st.caption(nice_date(q["date"]))
+        st.caption(f"Pickup {nice_date(q['date'])} at {q['booked_time']}")
         if q["paused"]:
-            st.warning("The pickup desk is held up for a moment, so we are not showing a "
-                       "time right now. Your place is kept.", icon=":material/pause_circle:")
-            st.caption(f"You booked {q['booked_time']}. Checked at {nice_when(q['updated_at'])}.")
-            return
-        a, b, c = st.columns(3)
-        a.metric("Your place", f"#{q['position']} of {q['total']}")
-        b.metric("People ahead of you", q["ahead"])
-        c.metric("Expected window", f"{q['window_start']}–{q['window_end']}")
-        st.progress(1 - (q["ahead"] / q["total"]) if q["total"] else 1.0)
-        if q["delay"]:
-            st.caption(f"You booked {q['booked_time']}. We expect to reach you about "
-                       f"{q['delay']} minutes later because of the people booked before you.")
+            st.warning("Queue paused. Your place is kept; no estimate is available.")
+        elif q["state"] == d.SERVING:
+            st.info("You are being served.")
+        elif not q["checked_in"]:
+            st.info("Check in when you arrive to receive an approximate waiting time.")
         else:
-            st.caption(f"You booked {q['booked_time']}. You should be served on time.")
-        st.caption(f"Times are a guide only. Checked at {nice_when(q['updated_at'])}; this "
-                   "updates by itself every 20 seconds.")
+            a, b, col = st.columns(3)
+            a.metric("Your place", f"#{q['position']} of {q['total']}")
+            b.metric("People ahead of you", q["ahead"])
+            col.metric("Approximate wait", f"{q['wait_min']}-{q['wait_max']} minutes")
+        st.caption(f"Last updated {nice_when(q['updated_at'])}. Refreshes every 20 seconds.")
 
 
 @st.fragment(run_every="20s")
 def live_queue_card(allocation_id, title="Your place in the pickup queue"):
     """The queue card, refreshed every 20 seconds without reloading the page (FR-54).
     The refresh does not count as activity, so the 15-minute sign-out still applies."""
-    user = s.get_user(store(), st.session_state.get("user_id"))
-    if not user or not user["active"]:
+    user = me(touch=False)
+    if not user:
+        st.info("Your session has ended. Please sign in again.")
         return
     try:
         q = s.queue_status(store(), user, allocation_id)
-    except d.DomainError:
-        st.caption("We could not update your queue place just now. We will try again shortly.")
+    except (d.DomainError, sqlite3.Error, OSError):
+        st.caption("Estimate unavailable. We could not update your queue place just now.")
+        last = st.session_state.get(f"_queue_last_{allocation_id}")
+        if last:
+            st.caption(f"Last confirmed update: {nice_when(last)}")
         return
     if not q:
         return
+    st.session_state[f"_queue_last_{allocation_id}"] = q["updated_at"]
     queue_card(q, title)
     if q["can_check_in"]:
         if st.button("I'm here: check in", key=f"checkin_{allocation_id}", type="primary",
                      icon=":material/how_to_reg:"):
             try:
+                user = me()  # a button press is activity; the timer refresh is not
+                if not user:
+                    return
                 s.check_in(store(), user, allocation_id)
             except d.DomainError as e:
                 st.error(str(e), icon=":material/error:")

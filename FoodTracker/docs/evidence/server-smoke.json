@@ -1,0 +1,24 @@
+{
+  "checks": [
+    {
+      "path": "/_stcore/health",
+      "status": 200
+    },
+    {
+      "path": "/",
+      "status": 200
+    },
+    {
+      "path": "/foodshare/csrf",
+      "status": 200
+    },
+    {
+      "path": "/foodshare/session",
+      "missing_csrf_status": 403
+    },
+    {
+      "normal_mode_user_count": 0
+    }
+  ],
+  "scope": "HTTP server smoke; no browser JavaScript or usability measurement"
+}

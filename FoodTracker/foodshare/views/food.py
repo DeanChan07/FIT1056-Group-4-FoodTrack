@@ -39,7 +39,7 @@ def recipient_allocation_card(allocation_id):
                     f"{c.badge(a['status'])}")
         if a["status"] == d.ALLOCATED:
             c.live_queue_card(allocation_id)
-        elif a["status"] in (d.CANCELLED, d.NO_SHOW):
+        elif a["status"] in (d.CANCELLED, d.NO_SHOW, d.EXPIRED):
             st.info(f"This pickup was {a['status'].lower()}: {c.esc(a['close_reason'])}",
                     icon=":material/info:")
         st.markdown("**Your items**")
@@ -135,7 +135,7 @@ def allocations():
     elif show == "Collected":
         rows = [a for a in rows if a["status"] == d.COLLECTED]
     elif show == "Cancelled or missed":
-        rows = [a for a in rows if a["status"] in (d.CANCELLED, d.NO_SHOW)]
+        rows = [a for a in rows if a["status"] in (d.CANCELLED, d.NO_SHOW, d.EXPIRED)]
     for a in rows:
         a["items_text"] = ", ".join(f"{i['quantity']} × {i['name']}" for i in a["items"])
     c.table(rows, {"id": "No.", "recipient_name": "Recipient", "pickup_date": "Pickup date",
@@ -160,17 +160,18 @@ def allocation_detail(allocation_id):
         c.table(a["items"], {"name": "Item", "quantity": "Quantity"})
         if user["role"] == d.STAFF:
             q = s.queue_status(c.store(), user, allocation_id)
-            if q:
+            if q and q["checked_in"]:
                 st.caption(f"Queue: #{q['position']} of {q['total']}, expected "
                            f"{q['window_start']}–{q['window_end']}.")
         if a["distribution"]:
             dist = a["distribution"]
+            st.caption(f"Distribution record #{dist['id']}")
             st.success(f"Collected on {c.nice_date(dist['collected_date'])}: "
                        + ", ".join(f"{i['quantity']} × {c.esc(i['name'])}"
                                    for i in dist["items"]),
                        icon=":material/check_circle:")
             return
-        if a["status"] in (d.CANCELLED, d.NO_SHOW):
+        if a["status"] in (d.CANCELLED, d.NO_SHOW, d.EXPIRED):
             st.info(f"{a['status']} on {c.nice_when(a['closed_at'])}: "
                     f"{c.esc(a['close_reason'])}. The food went back on the shelf.",
                     icon=":material/info:")
@@ -191,22 +192,23 @@ def collection_form(a):
         st.markdown("**Record collection**")
         qty = {}
         if c.me()["role"] == d.STAFF:
-            when = st.date_input("Collected on", value=date.today(), max_value=date.today(),
+            when = st.date_input("Collected on", value=d.today(), max_value=d.today(),
                                  format="DD/MM/YYYY", key=f"col{a['id']}_date",
                                  help="Usually today. Pick an earlier day if you are entering "
                                       "a collection late.")
         else:
-            when = date.today()
+            when = d.today()
             st.caption(f"Collected today, {c.nice_date(c.iso(when))}.")
         for i in a["items"]:
             qty[i["item_id"]] = st.number_input(
                 f"{i['name']} collected", min_value=0, max_value=i["quantity"],
                 value=i["quantity"], step=1, key=f"col{a['id']}_{i['item_id']}_{i['batch_id']}")
+        reason = st.text_input("Late collection exception reason (Staff only)", key=f"col{a['id']}_exception") if c.me()["role"] == d.STAFF else ""
         if st.form_submit_button("Confirm collection", type="primary",
                                  icon=":material/check:"):
             try:
                 s.record_collection(c.store(), c.me(), a["id"], qty, c.iso(when),
-                                    batch_ids=shown)
+                                    batch_ids=shown, exception_reason=reason)
             except EditConflict as e:
                 c.forget(f"col{a['id']}_", f"snap_collect{a['id']}")
                 c.flash(str(e), "error")
@@ -221,7 +223,7 @@ def collection_form(a):
 def pickup_form(a):
     with st.form(f"pickup_form_{a['id']}", border=True):
         st.markdown("**Change pickup time**")
-        new_date = st.date_input("Date", value=c.as_date(a["pickup_date"], date.today()),
+        new_date = st.date_input("Date", value=c.as_date(a["pickup_date"], d.today()),
                                  format="DD/MM/YYYY", key=f"pick{a['id']}_date")
         new_time = st.time_input("Time", value=c.as_time(a["pickup_time"], time(14, 0)),
                                  step=900, key=f"pick{a['id']}_time")
@@ -277,8 +279,8 @@ def allocate_form(recipient):
                                         label_visibility="collapsed")
             chosen.append({"batch_id": b["id"], "quantity": amount})
         a, b = st.columns(2)
-        pickup_date = a.date_input("Pickup date", value=date.today() + timedelta(days=1),
-                                   min_value=date.today(), format="DD/MM/YYYY",
+        pickup_date = a.date_input("Pickup date", value=d.today() + timedelta(days=1),
+                                   min_value=d.today(), format="DD/MM/YYYY",
                                    key=f"alloc{rid}_date")
         pickup_time = b.time_input("Pickup time", value=time(14, 0), step=900,
                                    key=f"alloc{rid}_time")
@@ -343,10 +345,11 @@ def swap_decision(swap_id):
                     format_func=lambda i: next(
                         f"{b['name']} · {b['available']} available · use by "
                         f"{c.nice_date(b['expiry_date'])}" for b in sw["options"] if b["id"] == i))
+                quantity = st.number_input("Replacement quantity", min_value=1, value=sw["quantity"], step=1, key=f"swap{swap_id}_qty")
                 if st.button("Approve swap", type="primary", key=f"swap{swap_id}_approve",
                              icon=":material/check:"):
                     try:
-                        s.approve_swap(c.store(), user, swap_id, option)
+                        s.approve_swap(c.store(), user, swap_id, option, quantity, loaded_version=sw.get("version") or 0)
                     except DomainError as e:
                         st.error(str(e), icon=":material/error:")
                     else:
@@ -357,7 +360,7 @@ def swap_decision(swap_id):
                                     placeholder="Sorry, we have nothing suitable to swap today.")
             if st.button("Decline swap", key=f"swap{swap_id}_decline", icon=":material/close:"):
                 try:
-                    s.decline_swap(c.store(), user, swap_id, response)
+                    s.decline_swap(c.store(), user, swap_id, response, loaded_version=sw.get("version") or 0)
                 except DomainError as e:
                     st.error(str(e), icon=":material/error:")
                 else:
@@ -381,6 +384,8 @@ def queue():
                        format_func=lambda x: f"{c.nice_date(x)} ({counts.get(x, 0)} pickups)")
     queue_table(day)
     q = s.pickup_queue(store, user, day)
+    if user["role"] == d.VOLUNTEER:
+        return
     with st.expander("Queue timing", icon=":material/tune:"):
         with st.form("queue_settings"):
             x, y = st.columns(2)
@@ -403,7 +408,10 @@ def queue():
 @st.fragment(run_every="20s")
 def queue_table(day):
     """The day's queue, refreshed every 20 seconds, with the desk actions."""
-    user = c.me()
+    user = c.me(touch=False)
+    if not user:
+        st.info("Your session has ended. Please sign in again.")
+        return
     store = c.store()
     q = s.pickup_queue(store, user, day)
     a, b, x = st.columns(3)
@@ -434,15 +442,20 @@ def queue_table(day):
             actions.append(("check_in", "Check in", ":material/how_to_reg:"))
         if row["state"] == d.WAITING:
             actions.append(("serve", "Start serving", ":material/play_arrow:"))
-        if row["state"] == d.SERVING:
+        if row["state"] == d.SERVING and user["role"] == d.STAFF:
             actions.append(("wait", "Back to waiting", ":material/undo:"))
-        actions.append(("no_show", "Did not come", ":material/person_off:"))
+        if user["role"] == d.STAFF:
+            actions.append(("no_show", "Did not come", ":material/person_off:"))
+        reason = st.text_input("Late arrival exception reason (Staff only)", key="queue_exception") if user["role"] == d.STAFF else ""
         with st.container(horizontal=True):
             for action, label, icon in actions:
                 if st.button(label, key=f"queue_{action}", icon=icon):
                     try:
+                        user = c.me()
+                        if not user:
+                            return
                         if action == "check_in":
-                            s.check_in(store, user, chosen)
+                            s.check_in(store, user, chosen, exception_reason=reason)
                         else:
                             s.move_in_queue(store, user, chosen, action)
                     except DomainError as e:

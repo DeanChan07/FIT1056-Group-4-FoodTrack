@@ -26,7 +26,9 @@ from .base import require
 from .donations import find_donation, list_donations, receive_donation, schedule_donation
 from .insights import (audit_events, build_report, dashboard_stats, delete_old_feedback,
                        feedback_inbox, mark_feedback_reviewed, report_csv, submit_feedback)
-from .people import (assign_task, get_profile, list_tasks, list_volunteers,
+from .public_controls import feedback_form
+from .maintenance import run_maintenance, expire_overdue_allocations
+from .people import (cancel_task, update_task, assign_task, get_profile, list_tasks, list_volunteers,
                      recipients_for_allocation, save_profile)
 from .queue import check_in, move_in_queue, pickup_queue, queue_status, set_queue_settings
 from .stock import (adjust_stock, get_batch, list_batches, reverse_adjustment, save_batch,

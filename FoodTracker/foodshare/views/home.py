@@ -62,7 +62,7 @@ def team_home():
     left, right = st.columns(2, gap="medium")
     with left.container(border=True):
         st.markdown("**Use soon**")
-        near = s.stock_alerts(store, user)["near_expiry"]
+        near = stats["alerts"]["near_expiry"]
         c.table(near[:6], {"name": "Item", "quantity": "On shelf", "expiry_date": "Use by",
                            "expiry_status": "Status"})
         c.link("alerts", "All alerts", ":material/arrow_forward:")

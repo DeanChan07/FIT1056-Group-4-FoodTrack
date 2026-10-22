@@ -1,0 +1,169 @@
+{
+  "schema_version": 2,
+  "tables": {
+    "users": {
+      "username": "text",
+      "display_name": "text",
+      "role": "text",
+      "active": "bool",
+      "failure_started_at": "text",
+      "password_hash": "text",
+      "created_by": "int",
+      "created_at": "text",
+      "deactivation_verification": "json",
+      "failed_logins": "int",
+      "locked_until": "text"
+    },
+    "sessions": {
+      "token_hash": "text",
+      "user_id": "int",
+      "created_at": "text",
+      "last_seen": "text"
+    },
+    "profiles": {
+      "recipient_id": "int",
+      "version": "int",
+      "household_size": "int",
+      "allergies_confirmed": "bool",
+      "allergies": "json",
+      "dietary_restrictions": "json",
+      "cultural_needs": "json",
+      "accessibility_needs": "text",
+      "preferred_pickup": "text",
+      "urgency": "text",
+      "updated_by": "int",
+      "updated_at": "text"
+    },
+    "donations": {
+      "reference": "text",
+      "donor_name": "text",
+      "dropoff_date": "text",
+      "dropoff_time": "text",
+      "items": "json",
+      "status": "text",
+      "created_at": "text",
+      "received_by": "int",
+      "received_at": "text",
+      "receipt": "text"
+    },
+    "batches": {
+      "name": "text",
+      "category": "text",
+      "quantity": "int",
+      "expiry_date": "text",
+      "allergens_confirmed": "bool",
+      "archived": "bool",
+      "allergens": "json",
+      "dietary_tags": "json",
+      "source_donation": "text",
+      "created_at": "text",
+      "on_hold": "bool",
+      "hold_reason": "text",
+      "version": "int"
+    },
+    "adjustments": {
+      "batch_id": "int",
+      "change": "int",
+      "reason": "text",
+      "made_by": "int",
+      "made_at": "text",
+      "reverses_id": "int",
+      "before_quantity": "int",
+      "after_quantity": "int",
+      "reason_code": "text",
+      "source_type": "text",
+      "source_id": "int"
+    },
+    "allocations": {
+      "recipient_id": "int",
+      "status": "text",
+      "pickup_date": "text",
+      "pickup_time": "text",
+      "created_by": "int",
+      "created_at": "text",
+      "items": "json",
+      "checked_in_at": "text",
+      "queue_state": "text",
+      "closed_by": "int",
+      "closed_at": "text",
+      "close_reason": "text",
+      "version": "int",
+      "exception_reason": "text"
+    },
+    "distributions": {
+      "allocation_id": "int",
+      "recipient_id": "int",
+      "collected_date": "text",
+      "items": "json",
+      "recorded_by": "int"
+    },
+    "swaps": {
+      "allocation_id": "int",
+      "item_id": "int",
+      "item_name": "text",
+      "recipient_id": "int",
+      "reason": "text",
+      "status": "text",
+      "response": "text",
+      "replacement_batch_id": "int",
+      "created_at": "text",
+      "reviewed_by": "int",
+      "closed_at": "text",
+      "version": "int"
+    },
+    "tasks": {
+      "volunteer_id": "int",
+      "task_type": "text",
+      "shift_date": "text",
+      "shift_time": "text",
+      "instructions": "text",
+      "assigned_by": "int",
+      "status": "text",
+      "version": "int",
+      "cancel_reason": "text"
+    },
+    "queue_entries": {
+      "allocation_id": "int",
+      "checked_in_at": "text",
+      "state": "text",
+      "closed_at": "text"
+    },
+    "public_limits": {
+      "scope": "text",
+      "bucket": "text",
+      "count": "int",
+      "started_at": "text"
+    },
+    "notifications": {
+      "user_id": "int",
+      "kind": "text",
+      "message": "text",
+      "read": "bool",
+      "created_at": "text"
+    },
+    "feedback": {
+      "message": "text",
+      "submitted_on": "text",
+      "reviewed": "bool",
+      "archived": "bool"
+    },
+    "audit": {
+      "at": "text",
+      "actor_id": "int",
+      "actor_role": "text",
+      "category": "text",
+      "action": "text",
+      "target": "text",
+      "details": "json",
+      "result": "text"
+    }
+  },
+  "settings_defaults": {
+    "low_stock_threshold": 5,
+    "minutes_per_pickup": 5,
+    "item_thresholds": {},
+    "maintenance_at": null,
+    "queue_window_minutes": 15,
+    "queue_paused": false
+  }
+}

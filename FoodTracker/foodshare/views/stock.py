@@ -61,14 +61,15 @@ def receive():
                 a, b, x = st.columns(3)
                 qty = a.number_input("Accepted", 0, item["offered_qty"], item["offered_qty"],
                                      key=f"{key}{n}_qty")
-                expiry = b.date_input("Use by", value=date.today() + timedelta(days=30),
+                expiry = b.date_input("Use by", value=d.today() + timedelta(days=30),
                                       format="DD/MM/YYYY", key=f"{key}{n}_expiry")
                 category = x.text_input("Category", "General", key=f"{key}{n}_category")
                 y, z = st.columns(2)
                 allergens = y.text_input("Allergens (comma separated)", key=f"{key}{n}_allergens")
+                confirmed = st.checkbox("Allergen label checked (blank means no declared allergens)", key=f"{key}{n}_confirmed")
                 tags = z.text_input("Dietary tags, e.g. halal, vegetarian", key=f"{key}{n}_tags")
                 accepted.append({"accepted_qty": qty, "expiry_date": c.iso(expiry),
-                                 "category": category, "allergens": allergens,
+                                 "category": category, "allergens": allergens, "allergens_confirmed": confirmed,
                                  "dietary_tags": tags})
         if st.form_submit_button("Record donation", type="primary", icon=":material/check:"):
             try:
@@ -91,7 +92,8 @@ def inventory():
                           placeholder="e.g. rice, canned")
     status = b.segmented_control("Status", ["All", "Near expiry", "Expired", "On hold"],
                                  default="All", key="inv_status")
-    rows = _with_text(s.list_batches(store, user, search))
+    show_archived = st.checkbox("Show archived batches", key="inv_archived")
+    rows = _with_text(s.list_batches(store, user, search, include_archived=show_archived))
     if status in ("Near expiry", "Expired"):
         rows = [r for r in rows if r["expiry_status"] == status]
     elif status == "On hold":
@@ -109,7 +111,7 @@ def inventory():
     add_tab, edit_tab, fix_tab = st.tabs([":material/add: Add stock",
                                           ":material/edit: Edit a batch",
                                           ":material/exposure: Correct stock"])
-    everything = s.list_batches(store, user)
+    everything = s.list_batches(store, user, include_archived=True)
 
     def pick(key):
         return st.selectbox("Batch", [r["id"] for r in everything], key=key,
@@ -146,10 +148,14 @@ def batch_form(batch_id):
                                   else None)
         expiry = y.date_input("Use by (required)",
                               value=c.as_date(batch.get("expiry_date"),
-                                              date.today() + timedelta(days=30)),
+                                              d.today() + timedelta(days=30)),
                               format="DD/MM/YYYY", key=key + "expiry")
         allergens = st.text_input("Allergens (comma separated)",
                                   ", ".join(batch.get("allergens", [])), key=key + "allergens")
+        confirmed = st.checkbox("Allergen label checked (blank means no declared allergens)",
+                                value=bool(batch.get("allergens_confirmed")), key=key + "confirmed")
+        archived = st.checkbox("Archive this batch (must have zero stock and no reservations)",
+                               value=bool(batch.get("archived")), key=key + "archived")
         tags = st.text_input("Dietary tags (comma separated)",
                              ", ".join(batch.get("dietary_tags", [])), key=key + "tags")
         on_hold = st.checkbox("On hold: do not give this out (for example a recall or a "
@@ -164,7 +170,8 @@ def batch_form(batch_id):
         if st.form_submit_button(label, type="primary", icon=":material/save:"):
             fields = {"name": name, "category": category, "quantity": quantity,
                       "expiry_date": c.iso(expiry), "allergens": allergens,
-                      "dietary_tags": tags, "on_hold": on_hold, "hold_reason": hold_reason}
+                      "dietary_tags": tags, "on_hold": on_hold, "hold_reason": hold_reason,
+                      "allergens_confirmed": confirmed, "archived": archived}
             if batch_id:
                 fields["loaded_version"] = loaded
             try:
@@ -195,9 +202,13 @@ def correction_form(batch_id):
                                 key=key + "change")
         reason = z.text_input("Reason (required)", key=key + "reason",
                               placeholder="e.g. 2 tins dented and thrown away")
+        reason_code = st.selectbox("Reason code", ["Recount", "Spoilage", "Damage", "Donation correction", "Distribution correction"], key=key+"code")
+        source_id = st.number_input("Original donation/distribution ID (needed only for a linked correction)", min_value=0, step=1, key=key+"source")
         if st.form_submit_button("Save correction", type="primary", icon=":material/save:"):
             try:
-                s.adjust_stock(c.store(), user, batch_id, change, reason, loaded)
+                s.adjust_stock(c.store(), user, batch_id, change, reason, loaded, reason_code=reason_code,
+                               source_type={"Donation correction": "donations", "Distribution correction": "distributions"}.get(reason_code),
+                               source_id=source_id or None)
             except EditConflict as e:
                 c.forget(key, f"snap_fix{batch_id}")
                 c.flash(str(e), "error")
@@ -213,7 +224,7 @@ def correction_form(batch_id):
               "Note": (f"Reverses #{h['reverses_id']}" if h["reverses_id"]
                        else "Reversed" if h["reversed"] else ""), "No.": h["id"]}
              for h in history])
-    reversible = [h for h in history if not h["reverses_id"] and not h["reversed"]]
+    reversible = [h for h in history if not h["reverses_id"] and not h["reversed"] and h.get("reason_code") not in ("Received", "Distributed")]
     if reversible:
         with st.expander("Undo a correction", icon=":material/undo:"):
             with st.form(f"reverse_form_{batch_id}", border=False):
@@ -252,9 +263,10 @@ def alerts():
     with st.form("threshold_form"):
         threshold = st.number_input("Warn me when an item is at or below", min_value=0,
                                     value=info["threshold"], step=1, key="alert_threshold")
+        item_name = st.text_input("Item name (leave blank for the default threshold)", key="alert_item")
         if st.form_submit_button("Save threshold", icon=":material/save:"):
             try:
-                s.set_low_stock_threshold(store, user, threshold)
+                s.set_low_stock_threshold(store, user, threshold, item_name or None)
             except DomainError as e:
                 st.error(str(e), icon=":material/error:")
             else:

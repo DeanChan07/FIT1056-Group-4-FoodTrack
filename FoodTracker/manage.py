@@ -39,26 +39,17 @@ def backup(target=None):
 
 
 def restore(source):
-    check = sqlite3.connect(source)
     try:
-        if check.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
-            sys.exit(f"{source} is damaged. Nothing was changed.")
-        check.execute("SELECT COUNT(*) FROM users")
-    except sqlite3.DatabaseError:
-        sys.exit(f"{source} is not a FoodShare Tracker database. Nothing was changed.")
-    finally:
-        check.close()
+        SqliteStore.validate_backup(source)
+    except (ValueError, OSError, sqlite3.DatabaseError) as exc:
+        sys.exit(f"Invalid FoodShare Tracker backup: {exc}. Nothing was changed.")
     live = data_path()
+    if os.path.realpath(source) == os.path.realpath(live):
+        sys.exit("The restore source cannot be the live database. Nothing was changed.")
     if os.path.exists(live):
         safety = backup()  # keep what was there, just in case
         print(f"(The data that was replaced is in {safety})")
-    SqliteStore(live)  # make sure the live file exists
-    source_conn, live_conn = sqlite3.connect(source), sqlite3.connect(live, timeout=30)
-    try:
-        source_conn.backup(live_conn)  # SQLite copies every page safely
-    finally:
-        live_conn.close()
-        source_conn.close()
+    SqliteStore(live).restore(source)
     print(f"Restored {source}. Start the app again with: python run.py")
 
 
@@ -82,8 +73,8 @@ def main(args):
             s.recover_admin(SqliteStore(data_path()), username, _ask_password())
             print("Password changed. Every session that account had open has been ended.")
         elif command == "maintenance":
-            removed = s.delete_old_feedback(SqliteStore(data_path()))
-            print(f"Removed {removed} feedback message(s) older than 90 days.")
+            result = s.run_maintenance(SqliteStore(data_path()), force=True)
+            print(f"Maintenance completed: {result}")
         else:
             print(__doc__)
             sys.exit(1)

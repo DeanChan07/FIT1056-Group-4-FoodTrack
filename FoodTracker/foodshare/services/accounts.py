@@ -3,11 +3,13 @@ and the local IT Admin bootstrap and recovery (FR-01 to FR-07, FR-38 to FR-40)."
 
 import hashlib
 import secrets
+import re
 from datetime import datetime, timedelta
 
 from .. import domain as d
 from ..domain import DomainError, PermissionDenied
 from ..passwords import check_password, hash_password
+from .public_controls import public_limit
 from .base import _audit, _clean, _now, _public_user, require
 
 # Checked when the username does not exist, so a wrong username takes as long as a wrong password.
@@ -25,7 +27,9 @@ def _check_new_password(password):
 
 def _create_user(tx, username, password, display_name, role, created_by=None):
     username = _clean(username, "a username").lower()
-    _clean(display_name, "a display name")
+    _clean(display_name, "a display name", max_length=100)
+    if not re.fullmatch(r"[a-z0-9_.-]{1,64}", username):
+        raise DomainError("Username must use 1 to 64 letters, numbers, dots, underscores or hyphens.")
     _check_new_password(password)
     if tx.find_one("users", username=username):
         raise DomainError("That username is already taken.")
@@ -45,6 +49,7 @@ def register_recipient(store, username, password, display_name, role=None):
     """FR-01: public self-registration creates only Recipient accounts."""
     if role not in (None, "", d.RECIPIENT):
         raise PermissionDenied("Only Recipient accounts can be created here.")
+    public_limit(store, "registration", 30)
     with store.transaction() as tx:
         user = _create_user(tx, username, password, display_name, d.RECIPIENT)
         _audit(tx, user, "Recipient registered", user["username"], d.SECURITY)
@@ -52,9 +57,7 @@ def register_recipient(store, username, password, display_name, role=None):
 
 
 def login(store, username, password):
-    """FR-02 and NFR-09. After five wrong passwords in a row the account pauses for one
-    minute, then two, four ... up to fifteen. A pause, not a permanent lock, so someone
-    typing a Staff username cannot keep the real person out for long."""
+    """NFR-09: five failures within fifteen minutes cause a fifteen-minute delay."""
     name = (username or "").strip().lower()
     problem = None
     with store.transaction() as tx:
@@ -64,22 +67,23 @@ def login(store, username, password):
             raise DomainError("Username or password is incorrect.")
         locked = user.get("locked_until")
         if locked and datetime.fromisoformat(locked) > d.now():
-            wait = max(1, round((datetime.fromisoformat(locked) - d.now()).total_seconds() / 60))
-            raise DomainError(f"Too many wrong passwords. Please wait about {wait} minute"
-                              f"{'s' if wait != 1 else ''} and try again.")
+            raise DomainError("Username or password is incorrect. Please try again later.")
         if not check_password(user["password_hash"], password or ""):
+            started = user.get("failure_started_at")
+            if not started or d.now() - datetime.fromisoformat(started) >= timedelta(minutes=15):
+                user["failed_logins"] = 0
+                user["failure_started_at"] = _now()
             user["failed_logins"] = (user.get("failed_logins") or 0) + 1
-            extra = user["failed_logins"] - d.FREE_LOGIN_ATTEMPTS
-            if extra >= 0:
-                minutes = min(d.LOCK_MAX_MINUTES, d.LOCK_FIRST_MINUTES * 2 ** extra)
-                user["locked_until"] = (d.now() + timedelta(minutes=minutes)).isoformat()
+            if user["failed_logins"] >= d.FREE_LOGIN_ATTEMPTS:
+                user["locked_until"] = (d.now() + timedelta(minutes=15)).isoformat()
             _audit(tx, None, "Sign-in failed", user["username"], d.SECURITY,
-                   failed_in_a_row=user["failed_logins"])
+                   result="Denied", failed_in_a_row=user["failed_logins"])
             problem = "Username or password is incorrect."
         elif not user["active"]:
             problem = "This account is inactive. Please contact the food bank."
         else:
             user["failed_logins"] = 0
+            user["failure_started_at"] = None
             user["locked_until"] = None
             _audit(tx, user, "Signed in", user["username"], d.SECURITY)
             return _public_user(user)
@@ -87,7 +91,8 @@ def login(store, username, password):
 
 
 def get_user(store, user_id):
-    user = store.reader().get("users", user_id)
+    with store.reader() as read_tx:
+        user = read_tx.get("users", user_id)
     return _public_user(user) if user else None
 
 
@@ -101,66 +106,89 @@ def start_session(store, user):
     """Make a sign-in that survives a page refresh. Only a hash of the token is stored."""
     token = secrets.token_urlsafe(32)
     with store.transaction() as tx:
+        live = tx.get("users", user["id"])
+        if not live or not live["active"]:
+            raise PermissionDenied("This account is no longer active.")
         tx.insert("sessions", {"token_hash": _token_hash(token), "user_id": user["id"],
                                "created_at": _now(), "last_seen": _now()})
     return token
 
 
-def resume_session(store, token):
-    """Return (user, None) while the session is valid, or (None, reason) when it ended.
-    Sessions end after 15 minutes without activity or 8 hours in total."""
-    if not token:
-        return None, None
-    tx = store.reader()
-    session = tx.find_one("sessions", token_hash=_token_hash(token))
+def _session_state(tx, token_hash):
+    session = tx.find_one("sessions", token_hash=token_hash)
     if not session:
-        return None, None
+        return None, None, None
     user = tx.get("users", session["user_id"])
-    now = d.now()
+    moment = d.now()
     reason = None
     if not user or not user["active"]:
         reason = "Your account is no longer active."
-    elif now - datetime.fromisoformat(session["last_seen"]) > timedelta(
-            minutes=d.SESSION_IDLE_MINUTES):
-        reason = (f"You were signed out after {d.SESSION_IDLE_MINUTES} minutes without "
-                  "activity. Please sign in again.")
-    elif now - datetime.fromisoformat(session["created_at"]) > timedelta(
-            hours=d.SESSION_MAX_HOURS):
-        reason = f"You were signed out after {d.SESSION_MAX_HOURS} hours. Please sign in again."
-    if reason:
-        end_session(store, token)
-        return None, reason
-    if now - datetime.fromisoformat(session["last_seen"]) > timedelta(seconds=30):
-        with store.transaction() as wtx:  # not on every click, to keep saves rare
-            live = wtx.find_one("sessions", token_hash=_token_hash(token))
-            if live:
-                live["last_seen"] = _now()
-    return _public_user(user), None
+    elif moment - datetime.fromisoformat(session["last_seen"]) >= timedelta(minutes=d.SESSION_IDLE_MINUTES):
+        reason = "You were signed out after 15 minutes without activity. Please sign in again."
+    elif moment - datetime.fromisoformat(session["created_at"]) >= timedelta(hours=d.SESSION_MAX_HOURS):
+        reason = "You were signed out after 8 hours. Please sign in again."
+    return session, user, reason
+
+
+def resume_session(store, token, *, touch=True):
+    """Validate every request; renew activity at most once per thirty seconds."""
+    if not isinstance(token, str) or not token:
+        return None, None
+    hashed = _token_hash(token)
+    with store.reader() as tx:
+        session, user, reason = _session_state(tx, hashed)
+        if not session:
+            return None, None
+        due = touch and d.now() - datetime.fromisoformat(session["last_seen"]) >= timedelta(seconds=30)
+        if not reason and not due:
+            return _public_user(user), None
+    with store.transaction() as tx:
+        session, user, reason = _session_state(tx, hashed)
+        if not session:
+            return None, None
+        if reason:
+            tx.delete("sessions", token_hash=hashed)
+            return None, reason
+        if touch:
+            session["last_seen"] = _now()
+        return _public_user(user), None
 
 
 def end_session(store, token):
     if not token:
         return
     with store.transaction() as tx:
-        tx.conn.execute("DELETE FROM sessions WHERE token_hash = ?", (_token_hash(token),))
+        tx.delete("sessions", token_hash=_token_hash(token))
 
 
 def _end_all_sessions(tx, user_id):
-    tx.conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+    tx.delete("sessions", user_id=user_id)
 
 
 # ---------------------------------------------------------------- team accounts
 
-def create_internal_account(store, actor, username, password, display_name, role):
+def create_internal_account(store, actor, username, password, display_name, role,
+                            *, current_password="", confirmed=False):
     """FR-04 and FR-05."""
     require(actor, d.MANAGER, d.ADMIN)
     if role not in d.MANAGEABLE_ROLES.get(actor["role"], ()):
         raise PermissionDenied("Your role cannot create that type of account.")
     with store.transaction() as tx:
+        if role == d.ADMIN:
+            _reauth_admin(tx, actor, current_password, confirmed)
         user = _create_user(tx, username, password, display_name, role, actor["id"])
         _audit(tx, actor, "Account created", user["username"], d.SECURITY,
                role=d.ROLE_LABELS[role])
         return _public_user(user)
+
+
+def _reauth_admin(tx, actor, password, confirmed):
+    require(actor, d.ADMIN)
+    live = tx.get("users", actor["id"])
+    if not confirmed or not live or not live["active"] or live["role"] != d.ADMIN:
+        raise PermissionDenied("Please confirm this IT Admin change.")
+    if not check_password(live["password_hash"], password or ""):
+        raise PermissionDenied("Please enter your current password to confirm this IT Admin change.")
 
 
 def list_accounts(store, actor):
@@ -168,23 +196,26 @@ def list_accounts(store, actor):
     roles = {
         d.STAFF: (d.RECIPIENT,),
         d.MANAGER: (d.STAFF, d.VOLUNTEER),
-        d.ADMIN: (d.MANAGER, d.RECIPIENT),
+        d.ADMIN: (d.ADMIN, d.MANAGER, d.RECIPIENT),
     }[actor["role"]]
-    return [_public_user(u) for u in store.reader().all("users") if u["role"] in roles]
+    with store.reader() as read_tx:
+        return [_public_user(u) for u in read_tx.all("users") if u["role"] in roles]
 
 
-def update_account(store, actor, user_id, display_name):
+def update_account(store, actor, user_id, display_name, *, current_password="", confirmed=False):
     require(actor, d.MANAGER, d.ADMIN)
     with store.transaction() as tx:
         user = tx.get("users", user_id)
         if not user or user["role"] not in d.MANAGEABLE_ROLES[actor["role"]]:
             raise PermissionDenied("Your role cannot change that account.")
-        user["display_name"] = _clean(display_name, "a display name")
+        if user["role"] == d.ADMIN:
+            _reauth_admin(tx, actor, current_password, confirmed)
+        user["display_name"] = _clean(display_name, "a display name", max_length=100)
         _audit(tx, actor, "Account renamed", user["username"], d.SECURITY)
         return _public_user(user)
 
 
-def deactivate_account(store, actor, user_id, confirmed, verification_note=""):
+def deactivate_account(store, actor, user_id, confirmed, verification_note="", *, current_password=""):
     """FR-04 to FR-07: confirmation always required; Recipients need a verified request.
     Every open session of that person ends straight away."""
     require(actor, d.MANAGER, d.ADMIN, d.STAFF)
@@ -198,9 +229,18 @@ def deactivate_account(store, actor, user_id, confirmed, verification_note=""):
             if actor["role"] not in (d.STAFF, d.ADMIN):
                 raise PermissionDenied("Only Staff or IT Admins can deactivate Recipient accounts.")
             note = _clean(verification_note, "how the request was verified")
-            user["deactivation_verification"] = {"note": note, "by": actor["id"], "at": _now()}
+            user["deactivation_verification"] = {"verified": True, "by": actor["id"], "at": _now()}
+            from .allocations import _close
+            for allocation in tx.find("allocations", recipient_id=user["id"], status=d.ALLOCATED):
+                _close(tx, actor, allocation, d.CANCELLED, "Recipient account deactivated")
+                _audit(tx, actor, "Allocation cancelled", f"Allocation {allocation['id']}")
+            tx.delete("notifications", user_id=user["id"])
         elif user["role"] not in d.MANAGEABLE_ROLES.get(actor["role"], ()):
             raise PermissionDenied("Your role cannot deactivate that account.")
+        if user["role"] == d.ADMIN:
+            _reauth_admin(tx, actor, current_password, confirmed)
+            if user["active"] and tx.count("users", role=d.ADMIN, active=True) <= 1:
+                raise DomainError("The last active IT Admin cannot be deactivated.")
         user["active"] = False
         _end_all_sessions(tx, user["id"])
         _audit(tx, actor, "Account deactivated", user["username"], d.SECURITY)
@@ -226,8 +266,8 @@ def recover_admin(store, username, new_password):
     _check_new_password(new_password)
     with store.transaction() as tx:
         user = tx.find_one("users", username=(username or "").strip().lower())
-        if not user or user["role"] != d.ADMIN:
-            raise DomainError("No IT Admin has that username.")
+        if not user or user["role"] != d.ADMIN or not user["active"]:
+            raise DomainError("No active IT Admin has that username.")
         user["password_hash"] = hash_password(new_password)
         user["failed_logins"] = 0
         user["locked_until"] = None

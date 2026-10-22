@@ -39,13 +39,17 @@ PAGES = {
 MENUS = {
     None: ["welcome", "sign_in", "register", "donate", "donation_status", "feedback"],
     d.RECIPIENT: ["recipient_home", "my_food", "my_swaps", "my_needs", "notices", "feedback"],
-    d.VOLUNTEER: ["volunteer_home", "tasks", "receive", "allocations", "notices"],
+    d.VOLUNTEER: ["volunteer_home", "tasks", "receive", "allocations", "queue", "notices"],
     d.STAFF: ["team_home", "receive", "inventory", "recipients", "allocations", "queue",
-              "swaps", "tasks", "alerts", "reports", "feedback_inbox", "accounts", "notices"],
+              "swaps", "tasks", "alerts", "reports", "feedback_inbox", "accounts", "audit", "notices"],
     d.MANAGER: ["team_home", "accounts", "tasks", "inventory", "alerts", "reports",
                 "feedback_inbox", "audit", "notices"],
     d.ADMIN: ["admin_home", "accounts", "audit", "notices"],
 }
+
+# Public anonymous feedback remains available while any role is signed in.
+for _role in d.INTERNAL_ROLES:
+    MENUS[_role].append("feedback")
 
 TITLES = {  # the same page can have a friendlier name for a role
     (d.VOLUNTEER, "tasks"): "My tasks",
@@ -66,9 +70,9 @@ def pages_for(user):
     if user:
         counts["notices"] = s.unread_count(c_store(), user)
     if role in (d.STAFF, d.MANAGER):
-        stats = s.dashboard_stats(c_store(), user)
-        counts["swaps"] = stats["pending_swaps"]
-        counts["feedback_inbox"] = stats["new_feedback"]
+        with c_store().reader() as tx:
+            counts["swaps"] = tx.count("swaps", status=d.PENDING)
+            counts["feedback_inbox"] = tx.count("feedback", reviewed=False, archived=False)
     pages = []
     for n, key in enumerate(MENUS[role]):
         title = TITLES.get((role, key), PAGES[key][1])

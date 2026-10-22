@@ -1,0 +1,23 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+rootdir: /workspace/scratch/8e03063e4c54/implementation/MA_Team04_FIT1056_Deliverable2_Project/FoodTracker
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.15.1
+collected 306 items
+
+tests/test_app.py ...................................................... [ 17%]
+.................................................                        [ 33%]
+tests/test_concurrency.py ......                                         [ 35%]
+tests/test_final_regressions.py ........................................ [ 48%]
+.....................                                                    [ 55%]
+tests/test_final_views.py .........                                      [ 58%]
+tests/test_new_features.py ............                                  [ 62%]
+tests/test_passwords.py .........                                        [ 65%]
+tests/test_review_fixes.py .......................................       [ 78%]
+tests/test_services.py .........................                         [ 86%]
+tests/test_submission_review.py ........................................ [ 99%]
+..                                                                       [100%]
+
+- generated xml file: /workspace/scratch/8e03063e4c54/implementation/MA_Team04_FIT1056_Deliverable2_Project/FoodTracker/docs/evidence/pytest-results.xml -
+======================= 306 passed in 116.95s (0:01:56) ========================

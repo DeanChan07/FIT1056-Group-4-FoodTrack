@@ -1,6 +1,11 @@
 # FoodShare Tracker runs on this computer only, unless started with: python run.py --network
 
+[global]
+developmentMode = false
+
 [server]
+enableXsrfProtection = true
+enableCORS = true
 address = "localhost"        # run.py --network changes this for phones and other computers
 port = 8501
 headless = false             # open the browser automatically

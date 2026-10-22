@@ -1,22 +1,15 @@
-# FIT1056 Group 04: FoodShare Tracker
+# FIT1056 Group 04 - FoodShare Tracker
 
-A prototype for a single-site community food bank: donations, inventory with expiry
-tracking, needs-aware allocation, private food swaps, a check-in pickup queue,
-volunteer tasks, reports and anonymous feedback.
-
-Built with **Streamlit** (screens) and **SQLite** (data), in Python 3.11 or newer.
+A single-site community food-bank application built with Streamlit and SQLite.
 
 ```bash
 cd FoodTracker
-bash setup.sh                 # Windows: .\setup.ps1
-./.venv/bin/python run.py     # opens http://localhost:8501
+bash setup.sh
+.venv/bin/python run.py --demo
 ```
 
-Demo sign-ins: `staff`, `volunteer`, `recipient`, `recipient2`, `recipient3`, `manager`, `admin`.
-Every demo password is `DemoPassword123!`.
+For normal operation, create the first administrator with `python manage.py create-admin`, then use `python run.py`. Demonstration mode is opt-in and uses a separate database by default.
 
-- How to run, demo walkthrough and structure: [FoodTracker/README.md](FoodTracker/README.md)
-- How the Flask vs Streamlit review issues were handled: [FoodTracker/docs/REVIEW_FIXES.md](FoodTracker/docs/REVIEW_FIXES.md)
-
-The earlier Flask version is in this repository's history (commit `e515714`).
-# FIT1056-Group-4-FoodTrack
+- [Complete README: installation, operation, testing and requirements](FoodTracker/README.md)
+- [Automated test evidence](FoodTracker/docs/evidence/validation.json)
+- [Architecture and sequence diagrams](FoodTracker/docs/diagrams/CURRENT_IMPLEMENTATION.md)

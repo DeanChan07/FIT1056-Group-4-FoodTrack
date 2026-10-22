@@ -11,7 +11,7 @@ from streamlit.testing.v1 import AppTest
 from foodshare import domain as d
 from foodshare import services as s
 from foodshare.views import nav
-from conftest import NEW_PASSWORD, user
+from conftest import NEW_PASSWORD, user, ready_pickup, send_feedback
 from seed import DEMO_PASSWORD
 
 APP = str(__import__("pathlib").Path(__file__).resolve().parent.parent / "app.py")
@@ -138,13 +138,12 @@ def test_donation_status_by_reference(store):
 
 def test_anonymous_feedback(store):
     at = open_page(store, "feedback", "recipient")  # signed in, still anonymous
-    at.feedback[0].set_value(4)
     at.text_area[0].input("Lovely volunteers")
     at = click(at, "Send anonymously")
     no_errors(at)
     last = store.reader().all("feedback")[-1]
-    assert last["rating"] == 5 and last["message"] == "Lovely volunteers"
-    assert set(last) == {"id", "rating", "category", "message", "submitted_on", "reviewed",
+    assert last["message"] == "Lovely volunteers"
+    assert set(last) == {"id", "message", "submitted_on", "reviewed",
                          "archived"}
     assert "Thank you" in shown(at)
 
@@ -204,6 +203,7 @@ def test_unsafe_food_cannot_be_chosen(store):
 
 
 def test_record_a_collection(store):
+    ready_pickup(store)
     at = open_page(store, "allocations", "staff")
     at.selectbox(key="alloc_open").select(1)
     at.run()
@@ -272,6 +272,7 @@ def test_staff_deactivate_a_recipient_needs_a_note(store):
 
 
 def test_reports_csv(store):
+    ready_pickup(store)
     s.record_collection(store, s.login(store, "staff", DEMO_PASSWORD), 1, {})
     at = open_page(store, "reports", "manager")
     no_errors(at)
@@ -291,7 +292,8 @@ def test_recipient_home_shows_their_queue_place(store):
     at = open_page(store, "recipient_home", "recipient2")
     no_errors(at)
     values = [m.value for m in at.metric]
-    assert "#2 of 2" in values and "14:06–14:21" in values
+    assert "Check in when you arrive" in shown(at)
+    assert not any("#None" in value for value in values)
 
 
 def test_recipient_asks_for_a_private_swap(store):
@@ -327,7 +329,7 @@ def test_recipient_withdraws_a_swap(store):
 
 def test_recipient_updates_their_needs(store):
     at = open_page(store, "my_needs", "recipient")
-    at.text_input(key=f"prof{user_id(store, 'recipient')}_allergies").input("peanut, sesame")
+    at.multiselect(key=f"prof{user_id(store, 'recipient')}_allergies").set_value(["peanut", "sesame"])
     at = click(at, "Save needs")
     no_errors(at)
     profile = store.reader().find_one("profiles", recipient_id=user_id(store, "recipient"))
@@ -348,6 +350,7 @@ def test_notices_are_marked_read_once_seen(store):
 # ---------------------------------------------------------------- two tabs at once
 
 def test_stock_form_cannot_undo_someone_elses_change(store):
+    ready_pickup(store)
     at = open_page(store, "inventory", "staff")
     at.selectbox(key="inv_fix").select(1)
     at.run()
@@ -372,6 +375,7 @@ def test_needs_form_cannot_erase_a_new_allergy(store):
 
 
 def test_collection_form_from_before_a_swap_is_refused(store):
+    ready_pickup(store)
     at = open_page(store, "allocations", "staff")
     at.selectbox(key="alloc_open").select(1)
     at.run()
@@ -467,10 +471,14 @@ def test_audit_page_shows_admins_sign_ins_only(store):
 
 def test_feedback_box_stops_after_five_in_one_session(store):
     at = open_page(store, "feedback")
-    at.session_state["_feedback_count"] = d.FEEDBACK_PER_SESSION
-    at.run()
-    assert "Thank you for all your feedback today" in shown(at)
-    assert not any(b.label == "Send anonymously" for b in at.button)
+    browser = at.session_state["_feedback_browser"]
+    for _ in range(5):
+        _, form = s.feedback_form(browser)
+        s.submit_feedback(store, "A message", browser_token=browser, form_token=form)
+    at.text_area[0].input("Sixth message")
+    at = click(at, "Send anonymously")
+    assert "ten minutes" in shown(at)
+    assert len(store.dump()["feedback"]) == 8
 
 
 def test_typed_names_are_not_turned_into_links(store):

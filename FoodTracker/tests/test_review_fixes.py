@@ -14,7 +14,7 @@ from foodshare import services as s
 from foodshare.domain import DomainError, EditConflict, PermissionDenied
 from foodshare.storage import SqliteStore
 from foodshare.views.common import esc
-from conftest import NEW_PASSWORD, user
+from conftest import NEW_PASSWORD, user, ready_pickup, send_feedback
 from seed import DEMO_PASSWORD, seed
 
 
@@ -128,21 +128,17 @@ def test_c7_passwords_must_be_15_to_128_characters(store):
     assert s.register_recipient(store, "okay", "x" * 15, "Okay")["role"] == d.RECIPIENT
 
 
-def test_c7_wrong_passwords_cause_a_growing_pause_not_a_permanent_lock(store, clock):
-    for _ in range(d.FREE_LOGIN_ATTEMPTS):
+def test_c7_five_failures_cause_a_fifteen_minute_pause(store, clock):
+    for _ in range(5):
         with pytest.raises(DomainError, match="incorrect"):
             s.login(store, "staff", "wrong password guess")
-    with pytest.raises(DomainError, match="wait"):  # even the right password waits
+    with pytest.raises(DomainError, match="incorrect"):
         s.login(store, "staff", DEMO_PASSWORD)
-    clock.forward(minutes=1, seconds=1)
+    clock.forward(minutes=14, seconds=59)
+    with pytest.raises(DomainError):
+        s.login(store, "staff", DEMO_PASSWORD)
+    clock.forward(seconds=1)
     assert s.login(store, "staff", DEMO_PASSWORD)["username"] == "staff"
-    for _ in range(d.FREE_LOGIN_ATTEMPTS + 6):  # keeps doubling, but stops at 15 minutes
-        clock.forward(minutes=20)
-        with pytest.raises(DomainError):
-            s.login(store, "staff", "wrong password guess")
-    locked = datetime.fromisoformat(store.reader().find_one("users", username="staff")
-                                    ["locked_until"])
-    assert locked - clock.now <= timedelta(minutes=d.LOCK_MAX_MINUTES)
 
 
 def test_c7_sign_in_attempts_are_audited_without_the_password(store):
@@ -217,15 +213,16 @@ def test_m8_waiting_swaps_expire_when_the_pickup_window_ends(store, clock):
     ravi, staff = user(store, "recipient2"), user(store, "staff")
     sw = s.request_swap(store, ravi, alloc["id"], 1, "")
     clock.forward(hours=1, minutes=16)  # 11:16, after the 15-minute window
-    with pytest.raises(DomainError, match="passed"):
+    with pytest.raises(DomainError, match="Pending|passed"):
         s.approve_swap(store, staff, sw["id"], 1)
     assert s.list_swaps(store, ravi)[0]["status"] == d.EXPIRED  # saved, not just shown
     assert store.reader().get("swaps", sw["id"])["status"] == d.EXPIRED
-    with pytest.raises(DomainError, match="passed"):
+    with pytest.raises(DomainError, match="Pending|passed"):
         s.request_swap(store, ravi, alloc["id"], 1, "")
 
 
 def test_m9_collection_closes_waiting_swaps_as_closed_not_declined(store):
+    ready_pickup(store)
     sw = s.request_swap(store, user(store, "recipient"), 1, 1, "")
     s.record_collection(store, user(store, "staff"), 1, {})
     swap = store.reader().get("swaps", sw["id"])
@@ -235,6 +232,7 @@ def test_m9_collection_closes_waiting_swaps_as_closed_not_declined(store):
 # ---------------------------------------------------------------- M11 collection date
 
 def test_m11_collection_date_is_saved_and_checked(store, clock):
+    ready_pickup(store)
     staff = user(store, "staff")
     with pytest.raises(DomainError, match="future"):
         s.record_collection(store, staff, 1, {}, day(1))
@@ -245,6 +243,7 @@ def test_m11_collection_date_is_saved_and_checked(store, clock):
 
 
 def test_partial_collection_puts_the_rest_back(store):
+    ready_pickup(store)
     staff = user(store, "staff")
     s.record_collection(store, staff, 1, {1: 1, 2: 1})  # took 1 rice of the 2 set aside
     rice = s.get_batch(store, staff, 1)
@@ -271,7 +270,7 @@ def test_n13_dashboard_and_inventory_show_the_same_units(store):
 def test_report_splits_expired_stock(store):
     report = s.build_report(store, user(store, "staff"), day(-1), day(0))
     yoghurt = next(x for x in report["stock"] if x["item"] == "Yoghurt")
-    assert yoghurt == {"item": "Yoghurt", "quantity": 0, "expired": 10}
+    assert yoghurt == {"item": "Yoghurt", "quantity": 0, "expired": 10, "held": 0}
     assert "Yoghurt,0,10" in s.report_csv(report)
 
 
@@ -318,6 +317,7 @@ def test_stock_history_and_audit_cannot_be_edited_or_deleted(store):
 # ---------------------------------------------------------------- FR-16 safety holds
 
 def test_held_food_cannot_be_set_aside_swapped_in_or_handed_out(store):
+    ready_pickup(store)
     staff = user(store, "staff")
     with pytest.raises(DomainError, match="why"):
         s.save_batch(store, staff, {"name": "Rice 1kg", "expiry_date": day(200),
@@ -361,7 +361,7 @@ def test_people_who_have_arrived_are_served_first_in_arrival_order(store, clock)
     assert order == [early["id"], late["id"]]  # booked later, but here first
     s.move_in_queue(store, staff, early["id"], "serve")
     row = s.pickup_queue(store, staff, day(0))["queue"][0]
-    assert row["state"] == d.SERVING and row["window_start"] == "10:00"
+    assert row["state"] == d.SERVING and row["window_start"] is None and row["wait_min"] is None
     with pytest.raises(DomainError):
         s.move_in_queue(store, staff, late["id"], "serve")  # not checked in yet
 
@@ -372,6 +372,7 @@ def test_no_show_puts_the_food_back_and_sends_a_notice(store, clock):
     assert s.get_batch(store, staff, 2)["available"] == 8
     with pytest.raises(DomainError):
         s.move_in_queue(store, staff, 1, "no_show")  # tomorrow's pickup: too early
+    clock.forward(hours=1, minutes=15)
     s.move_in_queue(store, staff, alloc["id"], "no_show")
     assert store.reader().get("allocations", alloc["id"])["status"] == d.NO_SHOW
     assert s.get_batch(store, staff, 2)["available"] == 12
@@ -400,7 +401,7 @@ def test_audit_log_is_split_by_role_and_keeps_private_details_out(store):
     assert {"Swap declined", "Stock corrected"} <= {r["action"] for r in manager_rows}
     everything = str(store.dump()["audit"])
     assert "allergic" not in everything and "gluten" not in everything
-    for name in ("staff", "volunteer", "recipient"):
+    for name in ("volunteer", "recipient"):
         with pytest.raises(PermissionDenied):
             s.audit_events(store, user(store, name))
 

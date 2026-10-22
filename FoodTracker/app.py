@@ -8,6 +8,8 @@ from foodshare.views import nav
 
 st.set_page_config(page_title="FoodShare Tracker", page_icon="🥫", layout="wide")
 
+from foodshare.services import run_maintenance
+run_maintenance(c.store())
 user = c.me()
 c.write_cookie()  # keeps the sign-in across a browser refresh
 page = st.navigation(nav.pages_for(user), expanded=True)

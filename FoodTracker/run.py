@@ -2,9 +2,9 @@
 
     python run.py                                   this computer only (http://localhost:8501)
     python run.py --network --cert C.pem --key K.pem   phones and other computers too, over HTTPS
-    python run.py --network                         same, without HTTPS (trusted test network only)
+    python run.py --demo                            isolated classroom demonstration
 
-Press Ctrl+C in this window to stop it. Demo data is created the first time.
+Press Ctrl+C to stop. Demo data is created only with --demo or FOODSHARE_DEMO=1.
 """
 
 import argparse
@@ -31,6 +31,7 @@ def _local_address():
 
 def main():
     parser = argparse.ArgumentParser(description="Start FoodShare Tracker.")
+    parser.add_argument("--demo", action="store_true", help="use an isolated demonstration database")
     parser.add_argument("--network", action="store_true",
                         help="let phones and other computers on the network open the app")
     parser.add_argument("--cert", help="HTTPS certificate file (.pem)")
@@ -40,26 +41,37 @@ def main():
     if bool(args.cert) != bool(args.key):
         parser.error("--cert and --key go together.")
 
+    if args.cert:
+        args.cert, args.key = os.path.abspath(args.cert), os.path.abspath(args.key)
     os.chdir(APP_DIR)  # so Streamlit reads .streamlit/config.toml
-    if not os.path.exists(data_path()):
+    if args.network and not args.cert:
+        parser.error("Network access requires --cert and --key for HTTPS.")
+    from foodshare import domain as d
+    if args.demo:
+        os.environ["FOODSHARE_DEMO"] = "1"
+    if d.demo_mode() and "FOODSHARE_DB" not in os.environ:
+        os.environ["FOODSHARE_DB"] = os.path.join(APP_DIR, "data", "demo.sqlite3")
+    if d.demo_mode() and not os.path.exists(data_path()):
         from seed import DEMO_PASSWORD, seed
         seed(data_path())
         print(f"Created demo data. Every demo password is: {DEMO_PASSWORD}")
 
-    options = ["--server.port", str(args.port)]
-    scheme = "https" if args.cert else "http"
+    from foodshare.storage import SqliteStore
+    from foodshare.services import run_maintenance
+    run_maintenance(SqliteStore(data_path()))
+    import streamlit as st
+    from foodshare.http_security import routes
+    os.environ["FOODSHARE_COOKIE_ENDPOINT"] = "1"
+    config = {"server.port": args.port, "server.address": "0.0.0.0" if args.network else "localhost",
+              "server.headless": True, "global.developmentMode": False, "server.enableXsrfProtection": True,
+              "server.enableCORS": True, "browser.gatherUsageStats": False}
     if args.cert:
-        options += ["--server.sslCertFile", args.cert, "--server.sslKeyFile", args.key]
+        config.update({"server.sslCertFile": args.cert, "server.sslKeyFile": args.key})
     if args.network:
-        host = _local_address()
-        options += ["--server.address", "0.0.0.0", "--browser.serverAddress", host,
-                    "--server.headless", "true"]
-        print(f"\nOther devices on this network can open: {scheme}://{host}:{args.port}")
-        if not args.cert:
-            print("WARNING: without --cert and --key, passwords and needs details travel "
-                  "unencrypted.\nOnly do this on a network you trust, for testing.\n")
-    sys.argv = ["streamlit", "run", os.path.join(APP_DIR, "app.py")] + options
-    sys.exit(cli.main())
+        config["browser.serverAddress"] = _local_address()
+        scheme = "https" if args.cert else "http"
+        print(f"Open {scheme}://{_local_address()}:{args.port}")
+    st.App(os.path.join(APP_DIR, "app.py"), routes=routes()).run(config=config)
 
 
 if __name__ == "__main__":

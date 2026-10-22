@@ -69,9 +69,10 @@ def sign_in():
             st.markdown("**New here?**")
             st.write("Recipients can make their own account.")
             c.link("register", "Create a Recipient account", ":material/person_add:")
-        with st.expander("Demo accounts"):
-            st.dataframe(DEMO_ACCOUNTS, hide_index=True, width="stretch")
-            st.caption(f"Every demo password is `{DEMO_PASSWORD}`.")
+        if d.demo_mode():
+            with st.expander("Demo accounts"):
+                st.dataframe(DEMO_ACCOUNTS, hide_index=True, width="stretch")
+                st.caption(f"Every demo password is `{DEMO_PASSWORD}`.")
 
 
 def sign_in_first():
@@ -128,8 +129,8 @@ def donate():
         })
     with st.form("donate_form"):
         a, b = st.columns(2)
-        dropoff_date = a.date_input("Drop-off date", value=date.today() + timedelta(days=1),
-                                    min_value=date.today(), format="DD/MM/YYYY")
+        dropoff_date = a.date_input("Drop-off date", value=d.today() + timedelta(days=1),
+                                    min_value=d.today(), format="DD/MM/YYYY")
         dropoff_time = b.time_input("Drop-off time", value=time(10, 0), step=900)
         donor_name = st.text_input("Your name or organisation (optional)")
         if st.form_submit_button("Book drop-off", type="primary", icon=":material/check:"):
@@ -154,7 +155,11 @@ def donation_status():
         st.form_submit_button("Check", type="primary", icon=":material/search:")
     if not ref:
         return
-    donation = s.find_donation(c.store(), ref)
+    try:
+        donation = s.find_donation(c.store(), ref)
+    except DomainError as e:
+        st.error(str(e))
+        return
     if not donation:
         st.error("We could not find a donation with that reference. Please check it and "
                  "try again.", icon=":material/error:")
@@ -174,40 +179,38 @@ def donation_status():
 
 
 def feedback():
-    c.header("Anonymous feedback",
-             "Tell us how we are doing. We only keep your rating, topic, message and the "
-             "date. No name, account, address or time of day.", "sentiment_satisfied")
+    c.header("Anonymous feedback", "We keep only your message, date and review status. "
+             "Please leave out names, contact details and anything that identifies you.",
+             "sentiment_satisfied")
     if st.session_state.get("feedback_sent"):
-        st.balloons()
-        st.success("Thank you. Your feedback has been passed on anonymously.",
-                   icon=":material/favorite:")
+        st.success("Thank you. Your feedback has been passed on anonymously.")
         if st.button("Write more feedback", icon=":material/edit:"):
             st.session_state.pop("feedback_sent")
             st.rerun()
         return
-    sent = st.session_state.get("_feedback_count", 0)
-    if sent >= d.FEEDBACK_PER_SESSION:  # kept in this browser tab's memory only, never saved
-        st.info("Thank you for all your feedback today. You can send more another time.",
-                icon=":material/favorite:")
-        return
-    with st.container(border=True):
-        st.markdown("**How was your experience?**")
-        face = st.feedback("faces", key="feedback_face")
-        if face is not None:
-            emoji, label = d.FEEDBACK_RATINGS[face + 1]
-            st.caption(f"You chose: {label}")
-        topic = st.pills("Topic", d.FEEDBACK_CATEGORIES, default="General",
-                         key="feedback_topic")
-        message = st.text_area("Anything you'd like to tell us? (optional)",
-                               max_chars=d.FEEDBACK_MAX_LENGTH, key="feedback_message")
-        if st.button("Send anonymously", type="primary", icon=":material/send:"):
+    if "_feedback_form" not in st.session_state:
+        browser, form = s.feedback_form(st.session_state.get("_feedback_browser")
+                                       or st.context.cookies.get("foodshare_feedback"))
+        st.session_state["_feedback_browser"] = browser
+        st.session_state["_feedback_form"] = form
+        # This short-lived token has no account/IP link and exists only in server memory.
+        import json
+        st.html("<script>document.cookie = " + json.dumps("foodshare_feedback=" + browser
+                + "; path=/; max-age=600; SameSite=Strict")
+                + ' + (location.protocol === "https:" ? "; Secure" : "");</script>',
+                unsafe_allow_javascript=True, width=1)
+    with st.form("anonymous_feedback"):
+        message = st.text_area("Your feedback (required)", max_chars=500, key="feedback_message")
+        if st.form_submit_button("Send anonymously", type="primary", icon=":material/send:"):
             try:
-                s.submit_feedback(c.store(), None if face is None else face + 1,
-                                  topic or "General", message)
+                s.submit_feedback(c.store(), message,
+                    browser_token=st.session_state["_feedback_browser"],
+                    form_token=st.session_state["_feedback_form"])
             except DomainError as e:
-                st.error(str(e), icon=":material/error:")
+                st.error(str(e))
+                st.session_state.pop("_feedback_form", None)
             else:
                 c.forget("feedback_")
+                st.session_state.pop("_feedback_form", None)
                 st.session_state["feedback_sent"] = True
-                st.session_state["_feedback_count"] = sent + 1
                 st.rerun()

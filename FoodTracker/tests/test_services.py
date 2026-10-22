@@ -8,7 +8,7 @@ import pytest
 from foodshare import domain as d
 from foodshare import services as s
 from foodshare.domain import DomainError, PermissionDenied
-from conftest import NEW_PASSWORD, user
+from conftest import NEW_PASSWORD, user, ready_pickup, send_feedback
 from seed import DEMO_PASSWORD
 
 
@@ -60,7 +60,9 @@ def test_ac07_recipient_deactivation_keeps_verification(store):
     with pytest.raises(DomainError):
         s.deactivate_account(store, staff, rec["id"], True, "")
     u = s.deactivate_account(store, staff, rec["id"], True, "Asked in person, ID checked")
-    assert not u["active"] and u["deactivation_verification"]["note"]
+    assert not u["active"]
+    stored = store.dump()["users"][u["id"]-1]["deactivation_verification"]
+    assert stored["verified"] and "note" not in stored
 
 
 # F-02 donations
@@ -122,6 +124,7 @@ def test_ac23_allergy_conflict_blocked(store):
 
 
 def test_ac26_collection_subtracts_stock(store):
+    ready_pickup(store)
     staff = user(store, "staff")
     s.record_collection(store, staff, 1, {})
     rice = store.reader().get("batches", 1)
@@ -129,6 +132,7 @@ def test_ac26_collection_subtracts_stock(store):
 
 
 def test_ac27_cannot_issue_more_than_stock(store):
+    ready_pickup(store)
     staff = user(store, "staff")
     with store.transaction() as tx:
         tx.get("batches", 1)["quantity"] = 1  # less than the 2 allocated
@@ -176,6 +180,7 @@ def test_ac39_bad_range_and_ac42_volunteer_denied(store):
 
 
 def test_ac41_csv_matches_totals(store):
+    ready_pickup(store)
     staff = user(store, "staff")
     s.record_collection(store, staff, 1, {})
     report = s.build_report(store, staff, day(-1), day(0))
@@ -195,6 +200,7 @@ def test_ac44_to_ac46_swap_request_rules(store):
 
 
 def test_ac45_no_swap_after_collection(store):
+    ready_pickup(store)
     staff, rec = user(store, "staff"), user(store, "recipient")
     s.record_collection(store, staff, 1, {})
     with pytest.raises(DomainError):

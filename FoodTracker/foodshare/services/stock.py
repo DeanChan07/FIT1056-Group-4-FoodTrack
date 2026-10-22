@@ -3,7 +3,7 @@
 
 from .. import domain as d
 from ..domain import DomainError, EditConflict
-from .base import _audit, _clean, _name, _now, _positive_int, require
+from .base import _audit, _clean, _name, _now, _positive_int, _whole_int, require
 
 
 def _reserved_map(tx):
@@ -26,8 +26,8 @@ def _with_status(tx, batch, reserved=None):
     view["reserved"] = reserved.get(batch["id"], 0)
     view["available"] = batch["quantity"] - view["reserved"]
     view["expiry_status"] = d.expiry_label(batch)
-    view["usable"] = d.is_usable(batch)
-    view["hold_text"] = "On hold" if batch.get("on_hold") else ""
+    view["usable"] = d.is_usable(batch) and not batch.get("archived")
+    view["hold_text"] = "Archived" if batch.get("archived") else "On hold" if batch.get("on_hold") else ""
     return view
 
 
@@ -36,24 +36,29 @@ def usable_units(rows):
     return sum(max(r["available"], 0) for r in rows if r["usable"])
 
 
-def list_batches(store, actor, search=""):
+def list_batches(store, actor, search="", *, include_archived=False):
     """FR-13 and FR-14."""
     require(actor, d.STAFF, d.MANAGER)
-    tx = store.reader()
-    term = (search or "").strip().lower()
-    batches = [b for b in tx.all("batches")
-               if not term or term in b["name"].lower() or term in (b["category"] or "").lower()]
-    reserved = _reserved_map(tx)
-    return [_with_status(tx, b, reserved) for b in sorted(batches, key=lambda b: b["expiry_date"])]
+    from .maintenance import expire_overdue_allocations
+    expire_overdue_allocations(store)
+    with store.reader() as tx:
+        term = (search or "").strip().lower()
+        batches = [b for b in tx.all("batches")
+                   if (include_archived or not b.get("archived"))
+                   and (not term or term in b["name"].lower() or term in (b["category"] or "").lower())]
+        reserved = _reserved_map(tx)
+        return [_with_status(tx, b, reserved) for b in sorted(batches, key=lambda b: b["expiry_date"])]
 
 
 def get_batch(store, actor, batch_id):
     require(actor, d.STAFF, d.MANAGER)
-    tx = store.reader()
-    batch = tx.get("batches", batch_id)
-    if not batch:
-        raise DomainError("Batch not found.")
-    return _with_status(tx, batch)
+    from .maintenance import expire_overdue_allocations
+    expire_overdue_allocations(store)
+    with store.reader() as tx:
+        batch = tx.get("batches", batch_id)
+        if not batch:
+            raise DomainError("Batch not found.")
+        return _with_status(tx, batch)
 
 
 def save_batch(store, actor, fields, batch_id=None):
@@ -77,7 +82,8 @@ def save_batch(store, actor, fields, batch_id=None):
             if quantity:
                 tx.insert("adjustments", {"batch_id": batch["id"], "change": quantity,
                                           "reason": "New stock added", "made_by": actor["id"],
-                                          "made_at": _now()})
+                                          "made_at": _now(), "before_quantity": 0,
+                                          "after_quantity": quantity, "reason_code": "Received"})
             action = "Stock added"
         else:
             batch = tx.get("batches", batch_id)
@@ -91,11 +97,15 @@ def save_batch(store, actor, fields, batch_id=None):
             action = "Batch details changed"
             if on_hold != bool(batch.get("on_hold")):
                 action = "Batch put on hold" if on_hold else "Batch hold released"
+        if fields.get("archived") and (batch["quantity"] or _reserved(tx, batch["id"])):
+            raise DomainError("Only empty batches without reservations can be archived.")
         batch.update({
             "name": name,
             "category": (fields.get("category") or "General").strip() or "General",
             "expiry_date": expiry,
-            "allergens": d.split_list(fields.get("allergens")),
+            "allergens": d.normalize_allergens(fields.get("allergens")),
+            "allergens_confirmed": bool(fields.get("allergens_confirmed")),
+            "archived": bool(fields.get("archived")),
             "dietary_tags": d.split_list(fields.get("dietary_tags")),
             "on_hold": on_hold,
             "hold_reason": hold_reason if on_hold else "",
@@ -108,14 +118,12 @@ def save_batch(store, actor, fields, batch_id=None):
 
 # ---------------------------------------------------------------- stock corrections
 
-def adjust_stock(store, actor, batch_id, change, reason, loaded_quantity=None):
+def adjust_stock(store, actor, batch_id, change, reason, loaded_quantity=None, *,
+                 reason_code="Recount", source_type=None, source_id=None):
     """FR-41: a signed correction (+ found, - damaged or miscounted) with a reason.
     The quantity can never drop below what is already set aside for Recipients."""
     require(actor, d.STAFF)
-    try:
-        change = int(change)
-    except (TypeError, ValueError):
-        raise DomainError("The change must be a whole number, like 3 or -2.")
+    change = _whole_int(change, "The change")
     if change == 0:
         raise DomainError("Please enter a change other than 0.")
     reason = _clean(reason, "the reason for the correction")
@@ -127,10 +135,24 @@ def adjust_stock(store, actor, batch_id, change, reason, loaded_quantity=None):
             raise EditConflict("Someone changed this stock while you were editing. "
                                "The form now shows the latest quantity; please check it "
                                "and save again.")
+        if reason_code not in ("Spoilage", "Damage", "Recount", "Donation correction", "Distribution correction"):
+            raise DomainError("Please choose a stock correction reason code.")
+        expected_source = {"Donation correction": "donations", "Distribution correction": "distributions"}.get(reason_code)
+        if expected_source and (source_type != expected_source or source_id is None):
+            raise DomainError("Please select the original donation or distribution for this correction.")
+        if source_type is not None:
+            if source_type not in ("donations", "distributions"):
+                raise DomainError("Choose a donation or distribution source.")
+            source = tx.get(source_type, source_id)
+            if not source or not any(i.get("batch_id") == batch_id for i in source["items"]):
+                raise DomainError("The correction source does not contain this batch.")
+        before = batch["quantity"]
         _apply_change(tx, batch, change)
         row = tx.insert("adjustments", {"batch_id": batch["id"], "change": change,
                                         "reason": reason, "made_by": actor["id"],
-                                        "made_at": _now()})
+                                        "made_at": _now(), "before_quantity": before,
+                                        "after_quantity": batch["quantity"], "reason_code": reason_code,
+                                        "source_type": source_type, "source_id": source_id})
         _audit(tx, actor, "Stock corrected", f"Batch {batch['id']} ({batch['name']})",
                change=change, reason=reason)
         return row
@@ -155,15 +177,21 @@ def reverse_adjustment(store, actor, adjustment_id, reason):
         original = tx.get("adjustments", adjustment_id)
         if not original:
             raise DomainError("Correction not found.")
+        if original.get("reason_code") in ("Received", "Distributed"):
+            raise DomainError("Receipt and collection entries need a linked correction, not a reversal.")
         if original.get("reverses_id"):
             raise DomainError("A reversal cannot itself be reversed. Add a new correction.")
         if tx.find_one("adjustments", reverses_id=original["id"]):
             raise DomainError("This correction has already been reversed.")
         batch = tx.get("batches", original["batch_id"])
+        before = batch["quantity"]
         _apply_change(tx, batch, -original["change"])
         row = tx.insert("adjustments", {"batch_id": batch["id"], "change": -original["change"],
                                         "reason": reason, "made_by": actor["id"],
-                                        "made_at": _now(), "reverses_id": original["id"]})
+                                        "made_at": _now(), "reverses_id": original["id"],
+                                        "before_quantity": before, "after_quantity": batch["quantity"],
+                                        "reason_code": "Reversal", "source_type": original.get("source_type"),
+                                        "source_id": original.get("source_id")})
         _audit(tx, actor, "Stock correction reversed", f"Batch {batch['id']} ({batch['name']})",
                change=-original["change"], reverses=original["id"])
         return row
@@ -172,16 +200,18 @@ def reverse_adjustment(store, actor, adjustment_id, reason):
 def stock_history(store, actor, batch_id):
     """Every correction to one batch, newest first, with who made it."""
     require(actor, d.STAFF, d.MANAGER)
-    tx = store.reader()
-    rows = tx.find("adjustments", batch_id=int(batch_id))
-    reversed_ids = {r["reverses_id"] for r in rows if r["reverses_id"]}
-    result = []
-    for r in sorted(rows, key=lambda r: r["id"], reverse=True):
-        view = dict(r)
-        view["made_by_name"] = _name(tx, r["made_by"])
-        view["reversed"] = r["id"] in reversed_ids
-        result.append(view)
-    return result
+    from .maintenance import expire_overdue_allocations
+    expire_overdue_allocations(store)
+    with store.reader() as tx:
+        rows = tx.find("adjustments", batch_id=int(batch_id))
+        reversed_ids = {r["reverses_id"] for r in rows if r["reverses_id"]}
+        result = []
+        for r in sorted(rows, key=lambda r: r["id"], reverse=True):
+            view = dict(r)
+            view["made_by_name"] = _name(tx, r["made_by"])
+            view["reversed"] = r["id"] in reversed_ids
+            result.append(view)
+        return result
 
 
 # ---------------------------------------------------------------- alerts (FR-27)
@@ -191,26 +221,41 @@ def stock_alerts(store, actor):
     threshold. Available means on shelf minus set aside, leaving out expired or held food,
     so an item that has fully expired shows as 0 instead of disappearing."""
     require(actor, d.STAFF, d.MANAGER)
-    tx = store.reader()
+    from .maintenance import expire_overdue_allocations
+    expire_overdue_allocations(store)
+    with store.reader() as tx:
+        threshold = tx.setting("low_stock_threshold")
+        reserved = _reserved_map(tx)
+        batches = [_with_status(tx, b, reserved) for b in tx.all("batches")]
+        return _alerts_from(tx, batches)
+
+
+def _alerts_from(tx, batches):
     threshold = tx.setting("low_stock_threshold")
-    reserved = _reserved_map(tx)
-    batches = [_with_status(tx, b, reserved) for b in tx.all("batches")]
     near = [b for b in batches if b["quantity"] > 0
             and (d.is_near_expiry(b) or d.is_expired(b))]
-    totals = {}
+    totals, labels = {}, {}
     for b in batches:
-        totals.setdefault(b["name"], 0)
+        if b.get("archived"):
+            continue
+        key = b["name"].casefold()
+        labels.setdefault(key, b["name"])
+        totals.setdefault(key, 0)
         if b["usable"]:
-            totals[b["name"]] += max(b["available"], 0)
-    low = [{"name": n, "quantity": q} for n, q in sorted(totals.items()) if q <= threshold]
+            totals[key] += max(b["available"], 0)
+    low = [{"name": labels[n], "quantity": q} for n, q in sorted(totals.items()) if q <= tx.setting("item_thresholds").get(n, threshold)]
     return {"threshold": threshold, "near_expiry": sorted(near, key=lambda b: b["expiry_date"]),
             "low_stock": low}
 
-
-def set_low_stock_threshold(store, actor, value):
+def set_low_stock_threshold(store, actor, value, item_name=None):
     require(actor, d.STAFF, d.MANAGER)
     threshold = _positive_int(value, "Low-stock threshold", allow_zero=True)
     with store.transaction() as tx:
-        tx.set_setting("low_stock_threshold", threshold)
+        if item_name:
+            items = tx.setting("item_thresholds")
+            items[_clean(item_name, "item name").casefold()] = threshold
+            tx.set_setting("item_thresholds", items)
+        else:
+            tx.set_setting("low_stock_threshold", threshold)
         _audit(tx, actor, "Low-stock threshold changed", "", threshold=threshold)
     return threshold

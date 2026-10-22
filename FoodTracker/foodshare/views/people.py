@@ -36,6 +36,13 @@ def profile_form(recipient_id, staff_mode):
                 fields[field] = st.number_input(label, min_value=1, step=1,
                                                 value=int(value) if value else None,
                                                 key=key + field)
+            elif field == "allergies":
+                fields[field] = st.multiselect(label, list(dict.fromkeys(d.ALLERGEN_OPTIONS
+                    + tuple(d.normalize_allergens(value)))), default=d.normalize_allergens(value),
+                    key=key + field, accept_new_options=True)
+                fields["allergies_confirmed"] = st.checkbox(
+                    "Allergy information confirmed (an empty selection means no known allergies)",
+                    value=bool(profile.get("allergies_confirmed")), key=key + "allergies_confirmed")
             elif field == "urgency":
                 fields[field] = st.segmented_control(label, d.URGENCY_LEVELS,
                                                      default=value or "Standard",
@@ -132,9 +139,11 @@ def _create_account(creatable):
                                 key="acct_new_password",
                                 help=f"{d.PASSWORD_MIN_LENGTH} to {d.PASSWORD_MAX_LENGTH} "
                                      "characters.")
+        auth = st.text_input("Your current password (required for IT Admin changes)", type="password", key="acct_new_auth") if c.me()["role"] == d.ADMIN else ""
+        confirmed = st.checkbox("Confirm this IT Admin change", key="acct_new_confirm") if c.me()["role"] == d.ADMIN else False
         if st.form_submit_button("Create account", type="primary", icon=":material/person_add:"):
             try:
-                s.create_internal_account(c.store(), c.me(), username, password, name, role)
+                s.create_internal_account(c.store(), c.me(), username, password, name, role, current_password=auth, confirmed=confirmed)
             except DomainError as e:
                 st.error(str(e), icon=":material/error:")
             else:
@@ -150,9 +159,11 @@ def _rename_account(people):
                            format_func=lambda i: next(f"{u['display_name']} ({u['username']})"
                                                       for u in people if u["id"] == i))
         name = st.text_input("New display name", key="acct_ren_name")
+        auth = st.text_input("Your current password (required for IT Admin changes)", type="password", key="acct_ren_auth") if c.me()["role"] == d.ADMIN else ""
+        confirmed = st.checkbox("Confirm this IT Admin change", key="acct_ren_confirm") if c.me()["role"] == d.ADMIN else False
         if st.form_submit_button("Save name", icon=":material/save:"):
             try:
-                s.update_account(c.store(), c.me(), who, name)
+                s.update_account(c.store(), c.me(), who, name, current_password=auth, confirmed=confirmed)
             except DomainError as e:
                 st.error(str(e), icon=":material/error:")
             else:
@@ -171,10 +182,11 @@ def _deactivate_account(people):
         note = st.text_input("How was the request checked? (needed for Recipients)",
                              key="acct_off_note",
                              placeholder="e.g. In person with photo ID, 7 Oct")
+        auth = st.text_input("Your current password (required for IT Admin changes)", type="password", key="acct_off_auth") if c.me()["role"] == d.ADMIN else ""
         sure = st.checkbox("Yes, deactivate this account", key="acct_off_sure")
         if st.form_submit_button("Deactivate", icon=":material/person_off:"):
             try:
-                s.deactivate_account(c.store(), c.me(), who, sure, note)
+                s.deactivate_account(c.store(), c.me(), who, sure, note, current_password=auth)
             except DomainError as e:
                 st.error(str(e), icon=":material/error:")
             else:
@@ -192,6 +204,7 @@ def task_cards(rows):
             st.markdown(f"**{c.nice_date(t['shift_date'])} at {t['shift_time']}** "
                         f"{c.badge(t['task_type'])}")
             st.markdown(c.esc(t["instructions"]) or "No extra instructions.")
+            st.caption(t.get("status") or "Active")
 
 
 def tasks():
@@ -215,7 +228,7 @@ def tasks():
                 kind = b.segmented_control("Task", d.TASK_TYPES, default=d.TASK_TYPES[0],
                                            key="task_kind")
                 x, y = st.columns(2)
-                day = x.date_input("Shift date", value=date.today() + timedelta(days=1),
+                day = x.date_input("Shift date", value=d.today() + timedelta(days=1),
                                    format="DD/MM/YYYY", key="task_day")
                 at = y.time_input("Shift time", value=time(9, 0), step=900, key="task_time")
                 notes = st.text_area("Instructions", key="task_notes")
@@ -230,3 +243,38 @@ def tasks():
     c.table(s.list_tasks(store, user),
             {"shift_date": "Date", "shift_time": "Time", "volunteer_name": "Volunteer",
              "task_type": "Task", "instructions": "Instructions"})
+
+    active = [t for t in s.list_tasks(store, user) if t.get("status") != d.CANCELLED]
+    if active and volunteers:
+        chosen = st.selectbox("Task to change", [t["id"] for t in active], key="task_edit_id",
+            format_func=lambda i: next(f"{t['volunteer_name']} - {t['shift_date']} {t['shift_time']} {t['task_type']}"
+                                      for t in active if t["id"] == i))
+        task = next(t for t in active if t["id"] == chosen)
+        prefix = f"taskedit{chosen}_"
+        version = c.snapshot(prefix, task.get("version") or 0)
+        with st.form(prefix):
+            who = st.selectbox("Volunteer", [v["id"] for v in volunteers],
+                index=next((n for n,v in enumerate(volunteers) if v["id"] == task["volunteer_id"]), 0),
+                format_func=lambda i: next(v["display_name"] for v in volunteers if v["id"] == i), key=prefix+"who")
+            kind = st.selectbox("Task type", d.TASK_TYPES, index=d.TASK_TYPES.index(task["task_type"]), key=prefix+"kind")
+            day = st.date_input("Shift date", value=d.parse_date(task["shift_date"]), key=prefix+"day")
+            at = st.time_input("Shift time", value=c.as_time(task["shift_time"]), key=prefix+"at")
+            notes = st.text_area("Instructions", value=task["instructions"] or "", key=prefix+"notes")
+            if st.form_submit_button("Save task changes"):
+                try:
+                    s.update_task(store, user, chosen, who, kind, c.iso(day), c.hhmm(at), notes, loaded_version=version)
+                except DomainError as e:
+                    st.error(str(e))
+                    c.forget("snap_"+prefix)
+                else:
+                    c.done("Task updated.", prefix, "snap_"+prefix)
+        with st.form(prefix+"cancel"):
+            reason = st.text_input("Cancellation reason", key=prefix+"reason")
+            confirmed = st.checkbox("Confirm cancellation", key=prefix+"confirmed")
+            if st.form_submit_button("Cancel task"):
+                try:
+                    s.cancel_task(store, user, chosen, reason, confirmed)
+                except DomainError as e:
+                    st.error(str(e))
+                else:
+                    c.done("Task cancelled. Its task permissions have ended.", prefix)
