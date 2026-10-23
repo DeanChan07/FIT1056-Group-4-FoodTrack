@@ -559,11 +559,11 @@ This table distinguishes technical evidence from acceptance records that must be
 | Requirement | Available technical evidence | Acceptance evidence to retain |
 | --- | --- | --- |
 | NFR-01: Access control | Service role/ownership/task denials, menu tests, and expired/inactive session rejection. | Deployment permission matrix and actual browser endpoint checks. |
-| NFR-02: Usability | Runnable workflows and a Staff session template. | Five first-time Staff sessions, the training limit, and at least 4/5 completing all three tasks independently. |
+| NFR-02: Usability | Owner-confirmed trial: 3 participants, 30 minutes training, 3/3 successful task sets, no issues reported. | Original target: five first-time Staff, at least 4/5 without correction; add two participants and retain assistance/task records. |
 | NFR-03: Atomic saves | Transaction rollback, injected receipt/history/notice failures, and no partial distribution assertions. | Relevant failure/recovery observations; tests do not establish every possible save failure. |
 | NFR-04: Recovery | Current backup/restore, v1 preservation fixtures, pre-upgrade backup, and injected migration failure recovery. | Complete-dataset rehearsal and independently measured recovery against the 30-minute target. |
 | NFR-05: Performance | Read-only session validation, indexed navigation counts, reduced dashboard scans, and date-filtered reports. | The 1,000-record, five-user, 100-operation timing baseline, with at least 95 operations within two seconds. |
-| NFR-06: Maintainability | Feature modules, rule/transaction comments, public interfaces, source hashes, tests, and implementation diagrams. | Teammate code review and contribution sign-off. |
+| NFR-06: Maintainability | Feature modules, README, diagrams and a completed groupmate code review with no issues reported. | Record reviewer name/date/files and separate UI/README checklist; contribution sign-off remains separate. |
 | NFR-07: Respectful interaction | Plain guidance, optional private swap reasons, minimal needs summaries, and escaped text. | Human review of wording, dignity, and participant understanding. |
 | NFR-08: Accessibility | Text statuses for safety, pause, expiry, and denied actions. | Browser keyboard, visible-focus, zoom, grayscale, and relevant assistive-technology checks. |
 | NFR-09: Authentication | Salted scrypt, password length checks, fixed lockout, idle/absolute expiry, and passive-refresh tests. | Browser refresh persistence, logout, timeout, deactivation, and recovery checks on the actual deployment. |
@@ -579,7 +579,7 @@ The completed English SRS is included as PDF and editable Word files in `docs/re
 
 The supplied historical Windows run predates the current `setup.ps1`: its business-code hashes match, but its installer hash differs. The current Linux pytest run covers the supplied application and test files; it does not execute a native Windows installer. Reviewer identities, contribution sign-off, exact browser versions and participant outcomes must not be inferred from automated tests.
 
-Manual check 7 (moderated usability sessions) and check 9 (team peer review) are Unknown / Not completed. Keyboard, zoom and wording checks confirmed by the tester are separate from the five-person usability target. Offline queue behavior is only partially demonstrated; a connection-error dialog is not evidence that a Recipient estimate was explicitly labelled unavailable. Recovery timing for the user's manual session was not recorded.
+Manual check 7 was completed with **3 participants**, **30 minutes of training**, successful completion by **all 3**, and **no issues reported**, according to the project owner. The original five-participant NFR-02/NAC-02 target remains partially verified; individual facilitator-correction records were not supplied. Check 9 groupmate code review was completed with **no issues reported**; the reviewer name, exact files/date and separate UI/README checklist were not supplied. Keyboard, zoom and wording checks remain separate observations. Offline queue behavior is only partially demonstrated; a connection-error dialog is not evidence that a Recipient estimate was explicitly labelled unavailable. Recovery timing for the user's manual session was not recorded.
 
 ### Demo backup and restore in Windows Git Bash
 
@@ -612,4 +612,4 @@ git status --short
 
 This untracks the folders without deleting their local files. A `.gitignore` rule does not remove items already committed or erase repository history. Commit and push the reviewed source/evidence changes through the team's normal process. This prepared ZIP contains no Git history and does not establish that a remote push has occurred.
 
-Manual tester attribution is **DeanChan**. Check 9 is an independent group member review of code, UI and README; it is not a summary of previous tests, so its reviewer and outcome remain **Unknown / Not completed**. See SRS Section 12.5 for baseline deviations, including restricted Staff late check-in and separately committed lifecycle maintenance.
+Manual tester and result reporter: **DeanChan**. A groupmate has completed the code review with **no issues reported**; the reviewer name was not supplied. The three-person usability trial is now recorded as completed and successful within its tested scope. See SRS Section 12.5 for baseline deviations, including restricted Staff late check-in and separately committed lifecycle maintenance.

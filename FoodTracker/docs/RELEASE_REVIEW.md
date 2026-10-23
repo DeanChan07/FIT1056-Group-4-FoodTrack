@@ -23,9 +23,9 @@ The prepared run has 306 passing pytest cases, 0 failed/errors/skipped, with exa
 
 | ID | Finding | Current status |
 | --- | --- | --- |
-| GAP-01 | Planned Flask/SQLAlchemy architecture differs from implemented Streamlit and Python sqlite3, including generic record tables and JSON columns. | Reconciled in the v1.6 report; original design change stated explicitly. |
-| GAP-02 | Five first-time Staff usability sessions, training duration and independent completion target. | Unknown / Not completed (manual check 7). |
-| GAP-03 | Another actual team member's review and contribution sign-off. | Unknown / Not completed (manual check 9). |
+| GAP-01 | Planned Flask/SQLAlchemy architecture differs from implemented Streamlit and Python sqlite3, including generic record tables and JSON columns. | Reconciled in the v1.7 report; original design change stated explicitly. |
+| GAP-02 | Original five-person usability target. | Trial completed: 3 participants, 30 minutes training, all tasks successful and no issues reported; five-person/no-correction acceptance remains partial. |
+| GAP-03 | Full release-review checklist metadata. | Groupmate code review completed with no issues reported. Reviewer name/date/files and separate UI/README checklist not supplied; contribution sign-off remains separate. |
 | GAP-04 | Complete Recipient queue offline fallback, explicit unavailable estimate and last-confirmed timestamp. | Partial evidence; screenshots do not demonstrate the full requirement. |
 | GAP-05 | Five-user, 1,000-record, 100-operation measured performance target. | Not demonstrated. Concurrency tests are not performance acceptance. |
 | GAP-06 | Manual end-to-end restoration against the 30-minute service-recovery target. | Functional recovery passed; browser recovery duration unmeasured. |
@@ -37,4 +37,6 @@ The prepared run has 306 passing pytest cases, 0 failed/errors/skipped, with exa
 
 These are honest verification limits, not claims that all listed behavior is broken. See `docs/evidence/README.md` for the manual evidence scope and report-section mapping. No participant identity, human reviewer, elapsed time or Git commit was invented. The source build SHA-256 is used where no trustworthy final Git commit is available.
 
-The final report additionally records D-02 (restricted Staff late-arrival check-in differs from the baseline closed-window rule), D-03 (derived rather than separately stored reservations), and D-04 (lifecycle maintenance may commit before a failed decision transaction). See report Section 12.5 for the full acceptance distinction. DeanChan is attributed only as the completed manual tester; check 9 requires another actual team member and remains Unknown / Not completed.
+The final report additionally records D-02 (restricted Staff late-arrival check-in differs from the baseline closed-window rule), D-03 (derived rather than separately stored reservations), and D-04 (lifecycle maintenance may commit before a failed decision transaction). See report Section 12.5 for the full acceptance distinction. DeanChan is attributed only as the completed manual tester; check 9 now has a completed groupmate code review with no issues reported; the reviewer name and exact scope checklist were not supplied.
+
+Report v1.7 adds the owner-confirmed trial/review results received on 23 October 2026. The application and test source are unchanged, so the existing 306-pass run remains the recorded automated result; no new pytest execution is claimed for this documentation-only update.

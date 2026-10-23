@@ -4,7 +4,7 @@ Revision date: 23 October 2026 MYT. All authored deliverables are English.
 
 The report preserves FR-01 to FR-57, AC-01 to AC-80, NFR-01 to NFR-13 and NAC-01 to NAC-13. Section 12.5 is the complete deviations register. Sections 9 to 12 and 14 use the executed/manual results.
 
-Manual tester: DeanChan. Check 9 requires another actual team member to review code, UI and README; it is not a summary of previous tests. Its reviewer remains unassigned.
+Manual tester and result reporter: DeanChan. Check 7 is completed for 3 participants after 30 minutes training, with all task sets successful and no issues reported. Check 9 groupmate code review is completed with no issues reported; the reviewer name and exact review checklist were not supplied.
 
 | ID | Area | Finding | Evidence or action | Status |
 | --- | --- | --- | --- | --- |
@@ -12,8 +12,8 @@ Manual tester: DeanChan. Check 9 requires another actual team member to review c
 | D-02 | FR-55 closed-window admission | Code permits a same-day late check-in by Staff with a reason, while the baseline says closed-window allocations shall not admit new check-ins. | queue.check_in and late-collection tests enforce a restricted exception; Volunteers/Recipients cannot use it. Decide explicitly whether to approve a requirement amendment or remove the exception. | Behavioral deviation open |
 | D-03 | FR-14 reservation representation | Baseline refers to recorded/stored reserved quantities; code derives reservations from active allocation items. | Derived values enforce the quantity equation without duplicate counters; the report explicitly explains the representation. | Design clarification |
 | D-04 | FR-43 / NFR-03 transaction wording | Lifecycle maintenance may commit expired allocations/swaps before a later decision transaction fails; the baseline groups affected closures with the triggering transaction. | refresh_swap_lifecycle and expire_overdue_allocations are separate maintenance transactions. Diagrams show this explicitly. Clarify the requirement or refactor; a failed decision does not undo prior legitimate expiry work. | Boundary deviation open |
-| G-01 | NFR-02 / NAC-02 | Five first-time Staff study and 4/5 success result absent. | Manual check 7; no participant/training/timing data. | Unknown / Not completed |
-| G-02 | NFR-06 / NAC-06 | Another team member's code/UI/README review absent. | Manual check 9; DeanChan is the completed manual tester, not a substituted independent reviewer. | Unknown / Not completed |
+| G-01 | NFR-02 / NAC-02 | The completed trial has 3 participants, rather than the specified 5. | All 3 completed tasks after 30 minutes training; no issues reported. First-time status, facilitator correction and individual timing not recorded. Add two participants for the original target. | Partial acceptance; trial passed |
+| G-02 | NFR-06 / NAC-06 | Groupmate code review is completed with no issues reported; full release-checklist sign-off is not documented. | Retain reported code-review Pass. Reviewer name/date/files and separate UI/README review details were not supplied. | Code review passed; metadata partial |
 | G-03 | FR-54 / NFR-12 / NAC-12 | Complete Recipient disconnected estimate/unavailable/timestamp behavior not demonstrated. | Simulated service-error fallback passes; actual connection screenshots cover only part of requirement. | Partial |
 | G-04 | NFR-05 / NAC-05 | Five-user, 1,000-record, 100-operation latency target not measured. | Concurrency invariants and suite duration do not measure this baseline. | Not demonstrated |
 | G-05 | NFR-04 / NAC-04 | 30-minute service resumption after a real failed release migration not measured. | Manual restore passed functionally; copied-dataset restore matched every table/settings; real old-database failure rehearsal absent. | Partial |

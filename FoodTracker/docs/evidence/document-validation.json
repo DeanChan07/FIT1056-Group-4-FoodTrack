@@ -1,6 +1,6 @@
 {
-  "report_version": "1.6",
-  "report_pages": 67,
+  "report_version": "1.7",
+  "report_pages": 68,
   "requirements": {
     "FR": 57,
     "AC": 80,
@@ -19,13 +19,13 @@
   "text_outside_page_safe_area": 0,
   "title_paragraph_borders": 0,
   "manual_tester": "DeanChan",
-  "check_7": "Unknown / Not completed",
-  "check_9": "Unknown / Not completed",
-  "peer_reviewer": "Unassigned",
-  "scope": "Document/package verification only; not an independent team code review or acceptance of outstanding NFRs",
+  "check_7": "Completed; Pass within reported 3-person trial; original five-person acceptance partial",
+  "check_9": "Completed; Pass within reported code-review scope",
+  "peer_reviewer": "Groupmate; name not supplied",
+  "scope": "Document/package verification; usability and groupmate code-review outcomes are owner-confirmed; outstanding NFRs remain scoped separately",
   "report_files": {
-    "MA_Team04_FIT1056_Deliverable2_Report.pdf": "ac99033b4182bf1923f31ecbb412b685aaaeb279fd7f057b5d2f0d1dc718a8d9",
-    "MA_Team04_FIT1056_Deliverable2_Report.docx": "dc045811c588e3f90b02c9ba8aa0c4b5864464b9c86cd419451595a663fb71ec",
-    "SRS_Findings.md": "98ad7dc0cc48584ebc68605692ce8f057b29c9c371ae32a6618c42bc53205b90"
+    "MA_Team04_FIT1056_Deliverable2_Report.pdf": "fbf3072458d389d6e1eeceb8b12d7cc11b69e5fae71c6617d047a58fc480d82c",
+    "MA_Team04_FIT1056_Deliverable2_Report.docx": "7e4bcf8dfe4018d62af743719221b462d5ad21f2aefad4ce45d72a4604692958",
+    "SRS_Findings.md": "ddef18095bc61ed4a11398ae059a9d36dd0d19e48e1f0fd177db235192a16cb7"
   }
 }

@@ -1,0 +1,35 @@
+{
+  "reported_on_myt": "2026-10-23",
+  "source": "Project owner's written confirmation in this conversation",
+  "reported_by": "DeanChan",
+  "check_7": {
+    "activity": "Task-based usability trial",
+    "participants": 3,
+    "training_minutes": 30,
+    "successful_task_sets": 3,
+    "tested_task_set": "Existing check 7 core tasks",
+    "outcome": "Pass within reported three-participant trial",
+    "issues_reported": "None",
+    "original_acceptance": "Five representative first-time Staff users, at least four successful without facilitator correction after no more than one hour training",
+    "acceptance_status": "Partial; original five-participant target retained",
+    "not_recorded": [
+      "Participant names and first-time Staff status",
+      "Individual task times",
+      "Facilitator corrections/assistance",
+      "Actual session date",
+      "Think-aloud transcript"
+    ]
+  },
+  "check_9": {
+    "activity": "Groupmate code review",
+    "outcome": "Pass within reported code-review scope",
+    "issues_reported": "None",
+    "reviewer": "Groupmate; name not supplied",
+    "not_recorded": [
+      "Actual review date",
+      "Exact reviewed files/build",
+      "Separate UI/README checklist and signed release-review record"
+    ]
+  },
+  "verification_note": "These are owner-confirmed manual results; no independent observation or invented individual logs are claimed."
+}

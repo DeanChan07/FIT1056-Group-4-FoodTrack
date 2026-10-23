@@ -1,6 +1,6 @@
 # Evidence register
 
-This register describes the evidence actually retained for the prepared code release. A passing test does not automatically satisfy every acceptance condition in the SRS. The completed v1.6 report and its requirement-by-requirement assessment are in docs/report/. Manual tester: DeanChan; independent peer reviewer: Unknown / Not completed.
+This register describes the evidence actually retained for the prepared code release. A passing test does not automatically satisfy every acceptance condition in the SRS. The completed v1.7 report and its requirement-by-requirement assessment are in docs/report/. Manual tester: DeanChan; peer code reviewer: groupmate, name not supplied; code review completed with no issues reported.
 
 ## Automated verification
 
@@ -37,12 +37,12 @@ Screenshots are in `manual/`. Use `manual/screenshot-index.csv` or `.json` for f
 | QUEUE-02 | Disconnection, unavailable estimate and retained last-confirmed time | Partial / recipient fallback unverified | Connection-error dialog and Staff last-update time have screenshots (E-225742, E-225806, E-230144). Explicit Recipient estimate-unavailable wording and retained Recipient confirmation time were not demonstrated. |
 | UI-01 | Keyboard and visible focus | Pass, tester-confirmed | Tester confirmed keyboard operation. No dedicated keyboard recording; connection-error images do not prove keyboard accessibility. |
 | UI-02 | 150% and 200% zoom | Pass, tester-confirmed | Tester reported checks matched expectations; no dedicated zoom evidence retained. |
-| UI-03 | Text communicates states and guidance | Pass within tester's checked scope | Screenshots contain Pending, Approved, Waiting and Collected text; comprehension is tester-confirmed. No participant study claimed. |
+| UI-03 | Text communicates states and guidance | Pass within tester's checked scope | Screenshots contain Pending, Approved, Waiting and Collected text; comprehension is tester-confirmed. This earlier text-state check is separate from the three-person trial reported in the follow-up. |
 | RECOVERY-01 | Demo backup, modify and restore | Pass, screenshots plus tester confirmation | E-232017 through E-234600: chicken 4 to 7 to 4; urgency Standard to Soon to Standard. Other baseline records were confirmed by the tester. Manual recovery duration not recorded. |
-| CHECK-07 | Moderated five-person usability study | Unknown / Not completed | No participant sessions or measured task-success outcomes supplied. |
-| CHECK-09 | Another team member's code and UI review | Unknown / Not completed | No reviewer identity, date, findings or sign-off supplied. |
+| CHECK-07 | Three-participant usability trial | Pass within reported trial; original NFR-02 partial | Owner confirms 3 participants, 30 minutes training, 3/3 successful task sets and no issues. Original five-person/no-correction criterion not fully verified. |
+| CHECK-09 | Groupmate code review | Pass within reported code-review scope | Owner confirms groupmate reviewed code and found no issues. Reviewer name, date, exact files and separate UI/README checklist not supplied. |
 
-The relevant manual workflows were performed on 22 October 2026 MYT according to the screenshot timestamps and tester account. Screenshot filenames are not precise elapsed-time measurements.
+The original screenshot-supported workflows were performed on 22 October 2026 MYT. The usability and groupmate-review confirmations were received on 23 October 2026 MYT; actual session/review dates were not supplied. Screenshot filenames are not precise elapsed-time measurements.
 
 ## Recovery artifact limitation
 
@@ -52,7 +52,7 @@ The uploaded runtime Demo database contained eight users and the test records, b
 
 | Report section | Evidence used |
 | --- | --- |
-| Sections 6, 8 and 9, implemented design and usability evaluation | Actual classes/records, current screens and tester keyboard/zoom/wording observations; five-person study remains Unknown / Not completed. |
+| Sections 6, 8 and 9, implemented design and usability evaluation | Actual classes/records, current screens and tester keyboard/zoom/wording observations; completed trial: 3 participants, 30 minutes training, all tasks successful, no issues; original five-person target remains partial. |
 | Section 10, sequence diagrams | Actual view-to-service-to-domain/storage calls; method names and transactional outcomes match code. |
 | Section 11, quality assurance | Automated reports, manual test register, concurrency and recovery evidence, defect observations and unresolved acceptance conditions. |
 | Section 12, implementation | Feature-to-code/test/evidence mapping, actual Streamlit/sqlite3 architecture and build hashes. |
@@ -62,3 +62,7 @@ The completed SRS follows the supplied template headings and records detailed de
 ## Additional transaction boundary deviation
 
 The report records D-04: lifecycle maintenance can persist timed allocation/swap closures before a later decision transaction fails. These are separate maintenance transactions, as shown in the actual sequences. The baseline wording about closures in the triggering transaction requires an explicit clarification or implementation change; no universal unchanged-domain-state claim is made across that maintenance boundary.
+
+## Follow-up confirmations
+
+See user-followup-results.json and .md for the owner-confirmed three-person usability trial and completed groupmate code review. These results replace the earlier uncompleted status; they do not invent individual timings, participant identities or reviewer sign-off.
