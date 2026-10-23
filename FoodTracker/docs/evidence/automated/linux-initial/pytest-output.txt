@@ -1,0 +1,214 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+rootdir: /workspace/scratch/739f18f17aec/final-work/FoodTracker
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.15.1
+collected 306 items
+
+tests/test_app.py ...................................................... [ 17%]
+.............................................F...                        [ 33%]
+tests/test_concurrency.py ......                                         [ 35%]
+tests/test_final_regressions.py ........................................ [ 48%]
+.....................                                                    [ 55%]
+tests/test_final_views.py .........                                      [ 58%]
+tests/test_new_features.py .........F..                                  [ 62%]
+tests/test_passwords.py .........                                        [ 65%]
+tests/test_review_fixes.py ....F...........F.................F....       [ 78%]
+tests/test_services.py ........F.........F......                         [ 86%]
+tests/test_submission_review.py ........................................ [ 99%]
+..                                                                       [100%]
+
+=================================== FAILURES ===================================
+___________________ test_volunteer_records_todays_collection ___________________
+
+store = <foodshare.storage.SqliteStore object at 0x7f92f3732c90>
+ten_am = datetime.datetime(2026, 10, 22, 10, 0)
+
+    def test_volunteer_records_todays_collection(store, ten_am):
+        alloc = pickup_today(store)
+        at = open_page(store, "allocations", "volunteer")
+        no_errors(at)
+>       at = click(at, "Confirm collection")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_app.py:460: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+at = AppTest(
+    _script_path='/tmp/tmp9068gir4/ca28a1036c7ac4dedfacc0fc958d74b5',
+    default_timeout=30,
+    _session_st...SpecialBlock(
+            type='sidebar'
+        ),
+        2: SpecialBlock(
+            type='event'
+        )
+    }
+)
+label = 'Confirm collection'
+
+    def click(at, label):
+>       next(b for b in at.button if b.label == label).click()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       StopIteration
+
+tests/test_app.py:46: StopIteration
+----------------------------- Captured stderr call -----------------------------
+2026-10-22 20:13:40.905 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-10-22 20:13:41.052 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-10-22 20:13:41.052 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+------------------------------ Captured log call -------------------------------
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:508 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:508 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:508 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+_________________ test_queue_defaults_to_next_day_with_pickups _________________
+
+store = <foodshare.storage.SqliteStore object at 0x7f92f3ec8c20>
+
+    def test_queue_defaults_to_next_day_with_pickups(store):
+        q = s.pickup_queue(store, user(store, "staff"))
+>       assert q["date"] == day(1) and q["upcoming"] == [(day(1), 2)]
+E       AssertionError: assert ('2026-10-24' == '2026-10-23'
+E         
+E         - 2026-10-23
+E         ?          ^
+E         + 2026-10-24
+E         ?          ^)
+
+tests/test_new_features.py:111: AssertionError
+______ test_c5_volunteer_on_shift_sees_today_only_and_never_swap_reasons _______
+
+store = <foodshare.storage.SqliteStore object at 0x7f92f3e620c0>
+clock = <test_review_fixes.Clock object at 0x7f92f3e63c80>
+
+    def test_c5_volunteer_on_shift_sees_today_only_and_never_swap_reasons(store, clock):
+        alloc = today_pickup(store)
+        s.request_swap(store, user(store, "recipient2"), alloc["id"], 1, "my child is allergic")
+        vol = user(store, "volunteer")  # seed gives Vic a Distribution shift today
+>       assert [a["id"] for a in s.list_allocations(store, vol)] == [alloc["id"]]
+E       assert [] == [3]
+E         
+E         Right contains one more item: 3
+E         Use -v to get more diff
+
+tests/test_review_fixes.py:99: AssertionError
+________________ test_m11_collection_date_is_saved_and_checked _________________
+
+store = <foodshare.storage.SqliteStore object at 0x7f92f3647c80>
+clock = <test_review_fixes.Clock object at 0x7f92f3645040>
+
+    def test_m11_collection_date_is_saved_and_checked(store, clock):
+        ready_pickup(store)
+        staff = user(store, "staff")
+        with pytest.raises(DomainError, match="future"):
+            s.record_collection(store, staff, 1, {}, day(1))
+        with pytest.raises(DomainError, match="before"):
+            s.record_collection(store, staff, 1, {}, "1999-01-01")
+>       dist = s.record_collection(store, staff, 1, {}, day(0))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_review_fixes.py:241: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+foodshare/services/base.py:90: in checked
+    return function(store, actor, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+store = <foodshare.storage.SqliteStore object at 0x7f92f3647c80>
+actor = {'id': 3, 'username': 'staff', 'display_name': 'Sam (Staff)', 'role': 'staff', ...}
+allocation_id = 1, actual_quantities = {}, collected_date = '2026-10-22'
+batch_ids = None, exception_reason = ''
+
+    @audit_food_blocks
+    def record_collection(store, actor, allocation_id, actual_quantities, collected_date=None,
+                          batch_ids=None, exception_reason=""):
+        """FR-22 and FR-23: distribution record and stock deduction in one save.
+    
+        Collecting fewer than allocated is allowed; the rest goes back on the shelf.
+        batch_ids maps item_id to the batch the form showed, so a swap approved while the
+        page was open cannot make the wrong food come off the shelf."""
+        require(actor, d.STAFF, d.VOLUNTEER)
+        expire_overdue_allocations(store)
+        day = d.parse_date(collected_date or d.today().isoformat())
+        if day > d.today():
+            raise DomainError("The collection date cannot be in the future.")
+        with store.transaction() as tx:
+            allocation = tx.get("allocations", allocation_id)
+            if not allocation:
+                raise DomainError("Allocation not found.")
+            if actor["role"] == d.VOLUNTEER:
+                if day != d.today() or not _volunteer_can_see(tx, actor, allocation):
+                    raise PermissionDenied("Volunteers can record a collection only on the pickup "
+                                           "day of their own Distribution shift.")
+            if allocation["status"] != d.ALLOCATED:
+                raise DomainError(f"This allocation is already {allocation['status'].lower()}.")
+            recipient = tx.get("users", allocation["recipient_id"])
+            if not recipient or not recipient["active"]:
+                raise DomainError("This Recipient account is inactive.")
+            if day < d.parse_date(allocation["pickup_date"]):
+                raise DomainError("The collection date cannot be before the pickup date.")
+            profile = tx.find_one("profiles", recipient_id=allocation["recipient_id"])
+            late = day == d.today() and d.now() >= d.pickup_end(allocation, tx.setting("queue_window_minutes"))
+            if late:
+                reason = exception_reason.strip() or allocation.get("exception_reason")
+                if actor["role"] != d.STAFF or not reason:
+                    raise DomainError("The pickup window has ended. Staff must record an exception reason for late collection.")
+                allocation["exception_reason"] = _clean(reason, "an exception reason")
+            if day < d.parse_date(allocation["created_at"][:10]):
+>               raise DomainError("The collection date cannot be before the food was set aside.")
+E               foodshare.domain.DomainError: The collection date cannot be before the food was set aside.
+
+foodshare/services/allocations.py:173: DomainError
+__________ test_feedback_can_be_archived_and_old_feedback_is_removed ___________
+
+store = <foodshare.storage.SqliteStore object at 0x7f92f3eeab10>
+clock = <test_review_fixes.Clock object at 0x7f92f3645550>
+
+    def test_feedback_can_be_archived_and_old_feedback_is_removed(store, clock):
+        staff = user(store, "staff")
+        s.mark_feedback_reviewed(store, staff, 1, archive=True)
+        inbox = s.feedback_inbox(store, staff)
+        assert inbox["total"] == 2 and inbox["archived"] == 1
+        assert "nobody made me feel awkward" not in str(store.dump()["audit"])
+        clock.forward(days=d.FEEDBACK_KEEP_DAYS + 1)
+>       assert s.delete_old_feedback(store) == 3
+E       assert 0 == 3
+E        +  where 0 = <function delete_old_feedback at 0x7f931e86e3e0>(<foodshare.storage.SqliteStore object at 0x7f92f3eeab10>)
+E        +    where <function delete_old_feedback at 0x7f931e86e3e0> = s.delete_old_feedback
+
+tests/test_review_fixes.py:460: AssertionError
+_____________________ test_ac15_ac16_near_expiry_boundary ______________________
+
+    def test_ac15_ac16_near_expiry_boundary():
+        assert d.is_near_expiry({"expiry_date": day(7)})
+>       assert not d.is_near_expiry({"expiry_date": day(8)})
+E       AssertionError: assert not True
+E        +  where True = <function is_near_expiry at 0x7f931eb80e00>({'expiry_date': '2026-10-30'})
+E        +    where <function is_near_expiry at 0x7f931eb80e00> = d.is_near_expiry
+
+tests/test_services.py:93: AssertionError
+_________________________ test_ac41_csv_matches_totals _________________________
+
+store = <foodshare.storage.SqliteStore object at 0x7f92f3065e20>
+
+    def test_ac41_csv_matches_totals(store):
+        ready_pickup(store)
+        staff = user(store, "staff")
+        s.record_collection(store, staff, 1, {})
+        report = s.build_report(store, staff, day(-1), day(0))
+        text = s.report_csv(report)
+>       assert report["total_distributed"] == 3
+E       assert 0 == 3
+
+tests/test_services.py:188: AssertionError
+- generated xml file: /workspace/scratch/739f18f17aec/final-work/FoodTracker/docs/evidence/pytest-results.xml -
+=========================== short test summary info ============================
+FAILED tests/test_app.py::test_volunteer_records_todays_collection - StopIter...
+FAILED tests/test_new_features.py::test_queue_defaults_to_next_day_with_pickups
+FAILED tests/test_review_fixes.py::test_c5_volunteer_on_shift_sees_today_only_and_never_swap_reasons
+FAILED tests/test_review_fixes.py::test_m11_collection_date_is_saved_and_checked
+FAILED tests/test_review_fixes.py::test_feedback_can_be_archived_and_old_feedback_is_removed
+FAILED tests/test_services.py::test_ac15_ac16_near_expiry_boundary - Assertio...
+FAILED tests/test_services.py::test_ac41_csv_matches_totals - assert 0 == 3
+================== 7 failed, 299 passed in 110.36s (0:01:50) ===================

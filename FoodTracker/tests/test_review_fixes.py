@@ -32,7 +32,7 @@ class Clock:
 
 @pytest.fixture
 def clock(monkeypatch):
-    return Clock(monkeypatch, datetime.combine(date.today(), datetime.min.time())
+    return Clock(monkeypatch, datetime.combine(d.today(), datetime.min.time())
                  + timedelta(hours=10))  # 10:00 today
 
 

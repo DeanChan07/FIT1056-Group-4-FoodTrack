@@ -1,18 +1,36 @@
-# Local Python tools and test output
+# Local environments are machine-specific and must never be committed
 .venv/
 venv/
+env/
+ENV/
+**/.venv/
+**/venv/
+**/env/
+**/ENV/
+
+# Python caches and temporary test artifacts
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# The database is made on each computer by seed.py (or run.py on first start)
+# Runtime data and private backups
 data/
 backups/
 *.sqlite3
 *.sqlite3-wal
 *.sqlite3-shm
+*.sqlite3-journal
+*.db
+*.db-wal
+*.db-shm
 
-# HTTPS keys and other secrets never go in git
+# Credentials and TLS material
+.env
+.env.*
 *.pem
 *.key
 .streamlit/secrets.toml
@@ -20,3 +38,5 @@ backups/
 # Operating system files
 .DS_Store
 Thumbs.db
+
+# Retained reports, evidence screenshots and CSV files in docs are intentional.

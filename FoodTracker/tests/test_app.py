@@ -338,7 +338,7 @@ def test_recipient_updates_their_needs(store):
 
 def test_notices_are_marked_read_once_seen(store):
     staff = s.login(store, "staff", DEMO_PASSWORD)
-    s.update_pickup(store, staff, 1, (date.today() + timedelta(days=2)).isoformat(), "10:00")
+    s.update_pickup(store, staff, 1, (d.today() + timedelta(days=2)).isoformat(), "10:00")
     rina = s.login(store, "recipient", DEMO_PASSWORD)
     assert s.unread_count(store, rina) == 1
     at = open_page(store, "notices", "recipient")
@@ -395,14 +395,14 @@ def ten_am(monkeypatch):
     """Pretend it is 10:00 today, so same-day pickups and check-in behave the same
     whenever the tests run."""
     from datetime import datetime
-    fixed = datetime.combine(date.today(), time(10, 0))
+    fixed = datetime.combine(d.today(), time(10, 0))
     monkeypatch.setattr(d, "now", lambda: fixed)
     return fixed
 
 
 def pickup_today(store, at="11:00"):
     return s.create_allocation(store, user(store, "staff"), user_id(store, "recipient2"),
-                               [{"batch_id": 2, "quantity": 1}], date.today().isoformat(), at)
+                               [{"batch_id": 2, "quantity": 1}], d.today().isoformat(), at)
 
 
 def test_staff_cancel_a_pickup(store):
@@ -446,7 +446,7 @@ def test_staff_serve_from_the_queue_desk(store, ten_am):
     alloc = pickup_today(store)
     s.check_in(store, user(store, "recipient2"), alloc["id"])
     at = open_page(store, "queue", "staff")
-    at.selectbox(key="queue_day").select(date.today().isoformat())
+    at.selectbox(key="queue_day").select(d.today().isoformat())
     at.run()
     at = click(at, "Start serving")
     no_errors(at)

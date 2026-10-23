@@ -25,7 +25,7 @@ def test_simultaneous_saves_are_all_kept(store):
 def test_simultaneous_allocations_never_oversell(store):
     staff = s.login(store, "staff", DEMO_PASSWORD)
     ravi = s.login(store, "recipient2", DEMO_PASSWORD)
-    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    tomorrow = (d.today() + timedelta(days=1)).isoformat()
     available = s.get_batch(store, staff, 1)["available"]
 
     def allocate(_):
@@ -83,7 +83,7 @@ def test_reading_notices_leaves_a_newer_one_unread(store):
     staff = s.login(store, "staff", DEMO_PASSWORD)
     rina = s.login(store, "recipient", DEMO_PASSWORD)
     shown = {n["id"] for n in s.list_notifications(store, rina)}
-    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    tomorrow = (d.today() + timedelta(days=1)).isoformat()
     new = s.update_pickup(store, staff, 1, tomorrow, "15:00")  # arrives while the page loads
     s.mark_notifications_read(store, rina, shown)
     assert s.unread_count(store, rina) == 1

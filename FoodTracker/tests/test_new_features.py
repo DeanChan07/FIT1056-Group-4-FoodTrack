@@ -13,7 +13,7 @@ from seed import DEMO_PASSWORD
 
 
 def day(n):
-    return (date.today() + timedelta(days=n)).isoformat()
+    return (d.today() + timedelta(days=n)).isoformat()
 
 
 

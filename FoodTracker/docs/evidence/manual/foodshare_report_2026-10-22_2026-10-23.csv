@@ -1,0 +1,21 @@
+FoodShare Tracker report,2026-10-22,2026-10-23
+
+Type,Date,Reference,Item,Quantity
+Distribution completed,2026-10-22,AL-4,Halal chicken,2
+Donation received,2026-10-22,DN-A855706C9D8AA7B1713986EA,E2E01 Rice,10
+Donation received,2026-10-22,DN-A855706C9D8AA7B1713986EA,E2E01 Beans,10
+Donation received,2026-10-22,DN-D3F51C9129D8F1EDE8F13B12,E2E4 grapes,111
+
+Total donated units,131
+Total distributed units,2
+
+Current stock item,Units in date and not held,Units expired,Units held
+Bread loaf,4,0,0
+Canned chickpeas,12,0,0
+E2E01 Beans,10,0,0
+E2E01 Rice,10,0,0
+E2E4 grapes,111,0,0
+Halal chicken,4,0,0
+Peanut butter,8,0,0
+Rice 1kg,20,0,0
+Yoghurt,0,10,0

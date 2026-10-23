@@ -1,0 +1,40 @@
+{
+  "executed_at_utc": "2026-10-22T16:18:02.428987+00:00",
+  "source_database_sha256": "cc590ead9094229977b322bdb85328cf39ac11489415af65fbd0302cb7177015",
+  "source_mutated": false,
+  "result": "Pass",
+  "comparison": "All application tables and settings exactly equal baseline before post-restore login",
+  "row_counts": {
+    "users": 8,
+    "sessions": 3,
+    "profiles": 4,
+    "donations": 4,
+    "batches": 9,
+    "adjustments": 14,
+    "allocations": 7,
+    "distributions": 5,
+    "swaps": 1,
+    "tasks": 2,
+    "queue_entries": 3,
+    "public_limits": 3,
+    "notifications": 3,
+    "feedback": 3,
+    "audit": 45
+  },
+  "changed_fields": {
+    "Halal chicken quantity": [
+      4,
+      7,
+      4
+    ],
+    "selected profile urgency": [
+      "Standard",
+      "Soon",
+      "Standard"
+    ]
+  },
+  "restore_and_comparison_seconds": 0.014581,
+  "staff_authentication_after_restore": "Pass",
+  "scope": "Offline restoration and Python-service login on a temporary copy of the complete uploaded Demo dataset; not browser service-resumption timing or a v1 upgrade",
+  "script_sha256": "f714f0cf9b3af32cd2e236a3f5a7a8fc4262aa9e8cca8e883054eafc4f5c9704"
+}

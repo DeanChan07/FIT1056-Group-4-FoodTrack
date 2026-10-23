@@ -1,0 +1,31 @@
+{
+  "report_version": "1.6",
+  "report_pages": 67,
+  "requirements": {
+    "FR": 57,
+    "AC": 80,
+    "NFR": 13,
+    "NAC": 13
+  },
+  "automated_result": {
+    "tests": 306,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 306
+  },
+  "source_hashes_match": true,
+  "navigation_page_mismatches": 0,
+  "text_outside_page_safe_area": 0,
+  "title_paragraph_borders": 0,
+  "manual_tester": "DeanChan",
+  "check_7": "Unknown / Not completed",
+  "check_9": "Unknown / Not completed",
+  "peer_reviewer": "Unassigned",
+  "scope": "Document/package verification only; not an independent team code review or acceptance of outstanding NFRs",
+  "report_files": {
+    "MA_Team04_FIT1056_Deliverable2_Report.pdf": "ac99033b4182bf1923f31ecbb412b685aaaeb279fd7f057b5d2f0d1dc718a8d9",
+    "MA_Team04_FIT1056_Deliverable2_Report.docx": "dc045811c588e3f90b02c9ba8aa0c4b5864464b9c86cd419451595a663fb71ec",
+    "SRS_Findings.md": "98ad7dc0cc48584ebc68605692ce8f057b29c9c371ae32a6618c42bc53205b90"
+  }
+}
